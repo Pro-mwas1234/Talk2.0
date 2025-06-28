@@ -10,6 +10,7 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
+const auth = firebase.auth();
 
 // DOM elements
 const elements = {
@@ -31,27 +32,39 @@ const elements = {
     cancelReply: document.getElementById('cancelReply'),
     onlineUsersToggle: document.getElementById('onlineUsersToggle'),
     onlineUsersPanel: document.getElementById('onlineUsersPanel'),
-    onlineUsersList: document.getElementById('onlineUsersList')
+    onlineUsersList: document.getElementById('onlineUsersList'),
+    authModal: document.getElementById('authModal'),
+    loginForm: document.getElementById('loginForm'),
+    registerForm: document.getElementById('registerForm'),
+    loginEmail: document.getElementById('loginEmail'),
+    loginPassword: document.getElementById('loginPassword'),
+    loginBtn: document.getElementById('loginBtn'),
+    registerName: document.getElementById('registerName'),
+    registerEmail: document.getElementById('registerEmail'),
+    registerPassword: document.getElementById('registerPassword'),
+    registerBtn: document.getElementById('registerBtn'),
+    authTabs: document.getElementById('authTabs'),
+    usernameModal: document.getElementById('usernameModal'),
+    usernameInput: document.getElementById('usernameInput'),
+    usernameAvailability: document.getElementById('usernameAvailability'),
+    submitUsernameBtn: document.getElementById('submitUsernameBtn')
 };
 
 // App state
 let currentUser = {
-    id: 'user-' + Math.random().toString(36).substr(2, 9),
-    name: null
+    id: null,
+    name: null,
+    username: null
 };
 let isTyping = false;
 let lastTypingTime = 0;
 let expiryTimer = null;
 let replyingTo = null;
 let onlineUsers = {};
-const MESSAGE_EXPIRY_MINUTES = 900;
-
-// Voice recording variables
 let mediaRecorder;
 let audioChunks = [];
-
-// Dark mode state
-let darkMode = localStorage.getItem('darkMode') === 'true';
+const MESSAGE_EXPIRY_MINUTES = 900;
+const TYPING_TIMEOUT = 3000;
 
 // Firebase references
 const messagesRef = database.ref('messages');
@@ -60,8 +73,9 @@ const usersRef = database.ref('users');
 
 // Initialize app
 function init() {
+    setupAuth();
+    setupUsernameSelection();
     updateDarkMode();
-    showNameModal();
     setupEventListeners();
     setupMobileFeatures();
     detectIOS();
@@ -74,62 +88,202 @@ function init() {
 
 // Dark mode functions
 function toggleDarkMode() {
-    darkMode = !darkMode;
+    const darkMode = !document.body.classList.contains('dark-mode');
     localStorage.setItem('darkMode', darkMode);
     updateDarkMode();
 }
 
 function updateDarkMode() {
+    const darkMode = localStorage.getItem('darkMode') === 'true';
     document.body.classList.toggle('dark-mode', darkMode);
     elements.darkModeToggle.innerHTML = darkMode ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
     elements.darkModeToggle.title = darkMode ? 'Switch to light mode' : 'Switch to dark mode';
 }
 
-// Show name modal
-function showNameModal() {
-    elements.nameModal.style.display = 'flex';
-    elements.userNameInput.focus();
+// Authentication functions
+function setupAuth() {
+    // Switch between login/register tabs
+    elements.authTabs.querySelectorAll('.auth-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            elements.authTabs.querySelector('.active').classList.remove('active');
+            tab.classList.add('active');
+            elements.loginForm.style.display = tab.dataset.tab === 'login' ? 'flex' : 'none';
+            elements.registerForm.style.display = tab.dataset.tab === 'register' ? 'flex' : 'none';
+        });
+    });
+
+    // Login handler
+    elements.loginBtn.addEventListener('click', handleLogin);
+    elements.loginPassword.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleLogin();
+    });
+
+    // Register handler
+    elements.registerBtn.addEventListener('click', handleRegister);
+    elements.registerPassword.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleRegister();
+    });
+
+    // Auth state listener
+    auth.onAuthStateChanged(handleAuthStateChange);
 }
 
-// Hide name modal
-function hideNameModal() {
-    elements.nameModal.style.display = 'none';
-}
-
-// Setup reply to message
-function setupReply(messageId, messageText, senderName) {
-    replyingTo = messageId;
-    elements.replyPreview.style.display = 'block';
-    elements.replyPreview.querySelector('.reply-preview-text').textContent = `Replying to ${senderName}: ${messageText.substring(0, 50)}${messageText.length > 50 ? '...' : ''}`;
-    elements.messageInput.focus();
-}
-
-// Cancel reply
-function cancelReply() {
-    elements.replyPreview.style.display = 'none';
-    replyingTo = null;
-}
-
-// Toggle online users panel
-function toggleOnlineUsersPanel() {
-    elements.onlineUsersPanel.classList.toggle('show');
+function handleLogin() {
+    const email = elements.loginEmail.value;
+    const password = elements.loginPassword.value;
     
-    if (elements.onlineUsersPanel.classList.contains('show')) {
-        const clickHandler = (e) => {
-            if (!elements.onlineUsersPanel.contains(e.target) && e.target !== elements.onlineUsersToggle) {
-                elements.onlineUsersPanel.classList.remove('show');
-                document.removeEventListener('click', clickHandler);
-            }
-        };
-        setTimeout(() => {
-            document.addEventListener('click', clickHandler);
-        }, 10);
+    if (!email || !password) {
+        alert('Please enter both email and password');
+        return;
+    }
+
+    auth.signInWithEmailAndPassword(email, password)
+        .catch(error => {
+            alert(error.message);
+        });
+}
+
+function handleRegister() {
+    const name = elements.registerName.value.trim();
+    const email = elements.registerEmail.value;
+    const password = elements.registerPassword.value;
+    
+    if (!name || !email || !password) {
+        alert('Please fill all fields');
+        return;
+    }
+
+    if (password.length < 6) {
+        alert('Password must be at least 6 characters');
+        return;
+    }
+
+    auth.createUserWithEmailAndPassword(email, password)
+        .then((userCredential) => {
+            // Create user profile with temporary display name
+            return usersRef.child(userCredential.user.uid).set({
+                displayName: name,
+                isOnline: true,
+                joinedAt: firebase.database.ServerValue.TIMESTAMP
+            });
+        })
+        .catch(error => {
+            alert(error.message);
+        });
+}
+
+function handleAuthStateChange(user) {
+    if (user) {
+        // User signed in
+        currentUser.id = user.uid;
+        
+        // Check if user has a username
+        usersRef.child(user.uid).once('value')
+            .then(snapshot => {
+                const userData = snapshot.val();
+                if (userData && userData.username) {
+                    // User has username, proceed to chat
+                    currentUser.name = userData.username;
+                    currentUser.username = userData.username;
+                    hideAuthModals();
+                    loadMessages();
+                    setupPresence();
+                } else {
+                    // No username set, show username modal
+                    showUsernameModal();
+                }
+            });
+    } else {
+        // No user signed in
+        showAuthModal();
     }
 }
 
-// Setup online users tracking
-function setupOnlineUsers() {
-    // Listen for online users
+// Username management
+function setupUsernameSelection() {
+    elements.usernameInput.addEventListener('input', checkUsernameAvailability);
+    elements.submitUsernameBtn.addEventListener('click', saveUsername);
+}
+
+function checkUsernameAvailability() {
+    const username = elements.usernameInput.value.trim();
+    
+    if (username.length < 3 || username.length > 15) {
+        elements.usernameAvailability.textContent = 'Username must be 3-15 characters';
+        elements.usernameAvailability.className = 'username-taken';
+        return;
+    }
+
+    usersRef.orderByChild('username').equalTo(username).once('value')
+        .then(snapshot => {
+            if (snapshot.exists() && Object.keys(snapshot.val())[0] !== currentUser.id) {
+                elements.usernameAvailability.textContent = 'Username already taken';
+                elements.usernameAvailability.className = 'username-taken';
+            } else {
+                elements.usernameAvailability.textContent = 'Username available';
+                elements.usernameAvailability.className = 'username-available';
+            }
+        });
+}
+
+function saveUsername() {
+    const username = elements.usernameInput.value.trim();
+    
+    if (username.length < 3 || username.length > 15) {
+        alert('Username must be 3-15 characters');
+        return;
+    }
+
+    // Check again right before saving
+    usersRef.orderByChild('username').equalTo(username).once('value')
+        .then(snapshot => {
+            if (snapshot.exists() && Object.keys(snapshot.val())[0] !== currentUser.id) {
+                alert('Username is already taken');
+                return;
+            }
+
+            // Save username to user profile
+            return usersRef.child(currentUser.id).update({
+                username: username
+            });
+        })
+        .then(() => {
+            currentUser.name = username;
+            currentUser.username = username;
+            hideUsernameModal();
+            loadMessages();
+            setupPresence();
+        })
+        .catch(error => {
+            console.error("Error saving username:", error);
+            alert("Error saving username. Please try again.");
+        });
+}
+
+// User presence
+function setupPresence() {
+    // Set user online
+    usersRef.child(currentUser.id).update({
+        isOnline: true,
+        lastActive: firebase.database.ServerValue.TIMESTAMP
+    });
+
+    // Setup disconnect handler
+    usersRef.child(currentUser.id).onDisconnect().update({
+        isOnline: false,
+        lastActive: firebase.database.ServerValue.TIMESTAMP
+    });
+
+    // Heartbeat to keep presence active
+    setInterval(() => {
+        if (currentUser.id) {
+            usersRef.child(currentUser.id).update({
+                lastActive: firebase.database.ServerValue.TIMESTAMP
+            });
+        }
+    }, 30000);
+
+    // Load online users
     usersRef.orderByChild('isOnline').equalTo(true).on('value', (snapshot) => {
         onlineUsers = {};
         elements.onlineUsersList.innerHTML = '';
@@ -143,14 +297,141 @@ function setupOnlineUsers() {
                 userElement.className = 'online-user';
                 userElement.innerHTML = `
                     <span class="status-indicator"></span>
-                    <span class="user-name">${user.name}</span>
+                    <span class="user-name">${user.username || user.displayName || 'Anonymous'}</span>
                 `;
                 elements.onlineUsersList.appendChild(userElement);
             }
         });
     });
+}
+
+// Message functions
+function sendMessage() {
+    const messageText = elements.messageInput.value.trim();
+    if (!messageText || !currentUser.id) return;
+
+    const timestamp = Date.now();
+    const messageData = {
+        text: messageText,
+        senderId: currentUser.id,
+        senderName: currentUser.username || currentUser.name,
+        timestamp: timestamp,
+        type: 'text',
+        status: 'sent'
+    };
     
-    // Listen for typing indicators
+    if (replyingTo) {
+        messageData.replyTo = replyingTo;
+    }
+
+    const newMessageRef = messagesRef.push();
+    newMessageRef.set(messageData)
+        .then(() => {
+            newMessageRef.update({ status: 'delivered' });
+            elements.messageInput.value = '';
+            elements.sendButton.disabled = true;
+            updateTyping(false);
+            
+            if (replyingTo) {
+                cancelReply();
+            }
+        })
+        .catch(error => {
+            console.error("Error sending message:", error);
+        });
+}
+
+function handleFileUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    if (!file.type.match('image.*')) {
+        alert('Please select an image file');
+        return;
+    }
+
+    // Show loading indicator for mobile
+    if ('ontouchstart' in window) {
+        const loading = document.createElement('div');
+        loading.className = 'message system';
+        loading.textContent = 'Uploading image...';
+        elements.messagesContainer.appendChild(loading);
+        scrollToBottom();
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        // Remove loading indicator if exists
+        if ('ontouchstart' in window) {
+            const loadingElements = document.querySelectorAll('.message.system');
+            const lastLoading = loadingElements[loadingElements.length - 1];
+            if (lastLoading && lastLoading.textContent === 'Uploading image...') {
+                elements.messagesContainer.removeChild(lastLoading);
+            }
+        }
+
+        const timestamp = Date.now();
+        const messageData = {
+            imageUrl: event.target.result,
+            senderId: currentUser.id,
+            senderName: currentUser.username || currentUser.name,
+            timestamp: timestamp,
+            type: 'image'
+        };
+        
+        if (replyingTo) {
+            messageData.replyTo = replyingTo;
+        }
+
+        messagesRef.push().set(messageData)
+            .then(() => {
+                if (replyingTo) {
+                    cancelReply();
+                }
+            })
+            .catch(error => {
+                console.error("Error uploading image:", error);
+            });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+}
+
+// Typing indicators
+function updateTyping(typing) {
+    if (!currentUser.id) return;
+    
+    if (typing !== isTyping) {
+        isTyping = typing;
+        typingRef.child(currentUser.id).set(isTyping ? currentUser.username || currentUser.name : null);
+    }
+    
+    // Reset typing timeout
+    clearTimeout(lastTypingTime);
+    if (typing) {
+        lastTypingTime = setTimeout(() => {
+            updateTyping(false);
+        }, TYPING_TIMEOUT);
+    }
+}
+
+// Message display
+function loadMessages() {
+    clearTimeout(expiryTimer);
+    
+    messagesRef.orderByChild('timestamp').on('child_added', (snapshot) => {
+        const message = snapshot.val();
+        const isExpired = isMessageExpired(message);
+        displayMessage(message, snapshot.key, isExpired);
+        
+        if (!expiryTimer && !isExpired) {
+            setExpiryTimer(message.timestamp);
+        }
+        
+        scrollToBottom();
+    });
+
+    // Typing indicators
     typingRef.on('value', (snapshot) => {
         const typingData = snapshot.val() || {};
         elements.typingUsers.innerHTML = '';
@@ -176,17 +457,278 @@ function setupOnlineUsers() {
     });
 }
 
-// Setup event listeners
+function displayMessage(message, messageId, isExpired = false) {
+    if (message.deleted || isExpired) return;
+    
+    const messageElement = document.createElement('div');
+    let messageContent = '';
+    
+    const timeString = new Date(message.timestamp).toLocaleTimeString([], 
+        { hour: '2-digit', minute: '2-digit' });
+
+    // Handle reply context if exists
+    if (message.replyTo) {
+        messagesRef.child(message.replyTo).once('value', (snapshot) => {
+            const originalMessage = snapshot.val();
+            if (originalMessage) {
+                const replyText = originalMessage.text 
+                    ? escapeHtml(originalMessage.text.substring(0, 50)) + 
+                      (originalMessage.text.length > 50 ? '...' : '')
+                    : '[Media]';
+                
+                const replyHtml = `
+                    <div class="message-reply">
+                        Replying to <span class="reply-sender">${originalMessage.senderName}</span>: ${replyText}
+                    </div>
+                `;
+                
+                if (messageElement.innerHTML.includes('message-reply')) {
+                    messageElement.querySelector('.message-reply').outerHTML = replyHtml;
+                } else {
+                    messageElement.innerHTML = replyHtml + messageElement.innerHTML;
+                }
+            }
+        });
+    }
+
+    // Create message content based on type
+    if (message.type === 'voice') {
+        messageElement.className = `message ${message.senderId === currentUser.id ? 'sent' : 'received'}`;
+        messageContent = `
+            <div class="message-header">
+                <span class="message-username">${message.senderName}</span>
+            </div>
+            <audio controls src="${message.audioData}"></audio>
+            <span class="timestamp">${timeString}</span>
+        `;
+    } 
+    else if (message.type === 'image') {
+        messageElement.className = `message ${message.senderId === currentUser.id ? 'sent' : 'received'}`;
+        messageContent = `
+            <div class="message-header">
+                <span class="message-username">${message.senderName}</span>
+            </div>
+            <img src="${message.imageUrl}" class="message-image" alt="Sent image">
+            <span class="timestamp">${timeString}</span>
+        `;
+    }
+    else if (message.senderId) {
+        messageElement.className = `message ${message.senderId === currentUser.id ? 'sent' : 'received'}`;
+        messageContent = `
+            <div class="message-header">
+                <span class="message-username">${message.senderName}</span>
+            </div>
+            <div class="message-text">${escapeHtml(message.text)}</div>
+            <span class="timestamp">${timeString}</span>
+        `;
+        
+        // Add status indicator for user's own messages
+        if (message.senderId === currentUser.id && message.status) {
+            messageContent += `
+                <span class="message-status ${message.status}" title="${message.status === 'delivered' ? 'Delivered' : 'Read'}"></span>
+            `;
+        }
+    } 
+    else {
+        // System message
+        messageElement.className = `message system ${message.type || ''}`;
+        messageContent = message.text;
+    }
+
+    // Add action buttons (reply, delete) if applicable
+    if (!isExpired && message.senderId && message.type !== 'system') {
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'message-actions';
+        
+        // Add reply button for received messages
+        if (message.senderId !== currentUser.id) {
+            const replyBtn = document.createElement('button');
+            replyBtn.className = 'reply-btn';
+            replyBtn.innerHTML = '<i class="fas fa-reply"></i>';
+            replyBtn.title = 'Reply to this message';
+            replyBtn.addEventListener('click', () => {
+                setupReply(messageId, message.text || '[Media]', message.senderName);
+            });
+            actionsDiv.appendChild(replyBtn);
+        }
+        
+        // Add delete button for user's own messages
+        if (message.senderId === currentUser.id) {
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-btn';
+            deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+            deleteBtn.title = 'Delete message';
+            deleteBtn.dataset.messageId = messageId;
+            deleteBtn.addEventListener('click', () => deleteMessage(messageId));
+            actionsDiv.appendChild(deleteBtn);
+        }
+        
+        messageContent += actionsDiv.outerHTML;
+    }
+
+    messageElement.innerHTML += messageContent;
+    elements.messagesContainer.appendChild(messageElement);
+    
+    // Mark messages as read when displayed
+    if (message.senderId !== currentUser.id && !message.read) {
+        messagesRef.child(messageId).update({ read: true });
+    }
+}
+
+// Message management
+function deleteMessage(messageId) {
+    if (confirm('Are you sure you want to delete this message?')) {
+        messagesRef.child(messageId).update({ deleted: true });
+    }
+}
+
+function setupReply(messageId, messageText, senderName) {
+    replyingTo = messageId;
+    elements.replyPreview.style.display = 'block';
+    elements.replyPreview.querySelector('.reply-preview-text').textContent = 
+        `Replying to ${senderName}: ${messageText.substring(0, 50)}${messageText.length > 50 ? '...' : ''}`;
+    elements.messageInput.focus();
+}
+
+function cancelReply() {
+    elements.replyPreview.style.display = 'none';
+    replyingTo = null;
+}
+
+// Voice recording
+function startRecording() {
+    navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+            
+            mediaRecorder.ondataavailable = e => {
+                if (e.data.size > 0) audioChunks.push(e.data);
+            };
+            
+            mediaRecorder.onstop = processRecording;
+            mediaRecorder.start(100); // Collect data every 100ms
+            
+            // Update UI
+            elements.startRecording.style.display = 'none';
+            elements.stopRecording.style.display = 'block';
+            elements.recordingStatus.style.display = 'block';
+        })
+        .catch(err => {
+            console.error("Recording failed:", err);
+            alert("Microphone access required for voice messages");
+        });
+}
+
+function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+        mediaRecorder.stream.getTracks().forEach(track => track.stop());
+    }
+}
+
+function processRecording() {
+    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+    const reader = new FileReader();
+    
+    reader.onload = () => {
+        const timestamp = Date.now();
+        const messageData = {
+            type: 'voice',
+            audioData: reader.result,
+            duration: Math.round(audioBlob.size / 1000), // Approximate duration in seconds
+            senderId: currentUser.id,
+            senderName: currentUser.username || currentUser.name,
+            timestamp: timestamp
+        };
+        
+        if (replyingTo) {
+            messageData.replyTo = replyingTo;
+        }
+
+        messagesRef.push().set(messageData)
+            .then(() => {
+                if (replyingTo) {
+                    cancelReply();
+                }
+            })
+            .catch(error => {
+                console.error("Error sending voice message:", error);
+            });
+        
+        // Reset UI
+        elements.startRecording.style.display = 'block';
+        elements.stopRecording.style.display = 'none';
+        elements.recordingStatus.style.display = 'none';
+        audioChunks = [];
+    };
+    
+    reader.readAsDataURL(audioBlob);
+}
+
+// Utility functions
+function isMessageExpired(message) {
+    if (!message.timestamp) return false;
+    const messageAge = (Date.now() - message.timestamp) / (1000 * 60);
+    return messageAge > MESSAGE_EXPIRY_MINUTES;
+}
+
+function setExpiryTimer(oldestMessageTime) {
+    const timeElapsed = (Date.now() - oldestMessageTime) / (1000 * 60);
+    const timeRemaining = (MESSAGE_EXPIRY_MINUTES - timeElapsed) * 60 * 1000;
+    
+    if (timeRemaining > 0) {
+        expiryTimer = setTimeout(() => {
+            cleanExpiredMessages();
+        }, timeRemaining);
+    }
+}
+
+function cleanExpiredMessages() {
+    messagesRef.once('value', (snapshot) => {
+        const messages = snapshot.val() || {};
+        const now = Date.now();
+        
+        Object.keys(messages).forEach((key) => {
+            const message = messages[key];
+            if (message.timestamp && (now - message.timestamp) > (MESSAGE_EXPIRY_MINUTES * 60 * 1000)) {
+                messagesRef.child(key).remove();
+            }
+        });
+        
+        sendSystemMessage('Old messages have been cleared');
+        expiryTimer = null;
+    });
+}
+
+function sendSystemMessage(text, type = 'system') {
+    const messageElement = document.createElement('div');
+    messageElement.className = `message system ${type}`;
+    messageElement.textContent = text;
+    elements.messagesContainer.appendChild(messageElement);
+    scrollToBottom();
+}
+
+function scrollToBottom() {
+    setTimeout(() => {
+        elements.messagesContainer.scrollTop = elements.messagesContainer.scrollHeight;
+    }, 100);
+}
+
+function escapeHtml(unsafe) {
+    return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+// UI Helpers
 function setupEventListeners() {
     // Dark mode toggle
     elements.darkModeToggle.addEventListener('click', toggleDarkMode);
     
-    // Name submission
-    elements.submitNameBtn.addEventListener('click', handleNameSubmit);
-    elements.userNameInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleNameSubmit();
-    });
-
     // Message sending
     elements.sendButton.addEventListener('click', sendMessage);
     elements.messageInput.addEventListener('keypress', (e) => {
@@ -223,7 +765,22 @@ function setupEventListeners() {
     });
 }
 
-// Mobile features setup
+function toggleOnlineUsersPanel() {
+    elements.onlineUsersPanel.classList.toggle('show');
+    
+    if (elements.onlineUsersPanel.classList.contains('show')) {
+        const clickHandler = (e) => {
+            if (!elements.onlineUsersPanel.contains(e.target) && e.target !== elements.onlineUsersToggle) {
+                elements.onlineUsersPanel.classList.remove('show');
+                document.removeEventListener('click', clickHandler);
+            }
+        };
+        setTimeout(() => {
+            document.addEventListener('click', clickHandler);
+        }, 10);
+    }
+}
+
 function setupMobileFeatures() {
     const keyboardHelper = document.querySelector('.mobile-keyboard-helper');
     let isKeyboardOpen = false;
@@ -237,8 +794,10 @@ function setupMobileFeatures() {
         }
     });
     
+    // Better touch handling
     document.addEventListener('touchstart', function() {}, {passive: true});
     
+    // Prevent double-tap zoom
     let lastTouch = 0;
     document.addEventListener('touchend', (event) => {
         const now = Date.now();
@@ -248,6 +807,7 @@ function setupMobileFeatures() {
         lastTouch = now;
     }, {passive: false});
     
+    // Mobile-specific event listeners
     if ('ontouchstart' in window) {
         elements.onlineUsersToggle.addEventListener('touchstart', (e) => {
             e.preventDefault();
@@ -256,7 +816,6 @@ function setupMobileFeatures() {
     }
 }
 
-// iOS detection
 function detectIOS() {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     if (isIOS) {
@@ -265,411 +824,33 @@ function detectIOS() {
     }
 }
 
-// Handle name submission
-function handleNameSubmit() {
-    const userName = elements.userNameInput.value.trim();
-    if (userName) {
-        currentUser.name = userName;
-        localStorage.setItem('chatUserName', userName);
-        hideNameModal();
-        
-        // Add user to online list
-        const userRef = usersRef.child(currentUser.id);
-        userRef.set({
-            name: userName,
-            joinedAt: firebase.database.ServerValue.TIMESTAMP,
-            isOnline: true,
-            lastActive: firebase.database.ServerValue.TIMESTAMP
-        }).then(() => {
-            userRef.onDisconnect().update({
-                isOnline: false,
-                lastActive: firebase.database.ServerValue.TIMESTAMP
-            });
-        });
-        
-        // Heartbeat to keep presence active
-        setInterval(() => {
-            if (currentUser.name) {
-                userRef.update({
-                    lastActive: firebase.database.ServerValue.TIMESTAMP
-                });
-            }
-        }, 30000);
-        
-        // Send join notification
-        sendSystemMessage(`${userName} joined the chat`, 'join');
-        loadMessages();
-        setupOnlineUsers();
-    }
+function showAuthModal() {
+    elements.authModal.style.display = 'flex';
+    elements.loginEmail.focus();
 }
 
-// Send message
-function sendMessage() {
-    const messageText = elements.messageInput.value.trim();
-    if (messageText) {
-        const timestamp = Date.now();
-        const messageData = {
-            text: messageText,
-            senderId: currentUser.id,
-            senderName: currentUser.name,
-            timestamp: timestamp,
-            expiry: timestamp + (MESSAGE_EXPIRY_MINUTES * 60 * 1000),
-            type: 'text',
-            status: 'sent'
-        };
-        
-        if (replyingTo) {
-            messageData.replyTo = replyingTo;
-        }
-        
-        const newMessageRef = messagesRef.push();
-        newMessageRef.set(messageData).then(() => {
-            newMessageRef.update({ status: 'delivered' });
-            
-            elements.messageInput.value = '';
-            elements.sendButton.disabled = true;
-            updateTyping(false);
-            
-            if (replyingTo) {
-                cancelReply();
-            }
-            
-            if (window.innerHeight < window.outerHeight) {
-                elements.messageInput.blur();
-            }
-        });
-    }
+function hideAuthModals() {
+    elements.authModal.style.display = 'none';
+    elements.usernameModal.style.display = 'none';
 }
 
-// Handle file upload
-function handleFileUpload(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    if ('ontouchstart' in window) {
-        const loading = document.createElement('div');
-        loading.className = 'message system';
-        loading.textContent = 'Uploading image...';
-        elements.messagesContainer.appendChild(loading);
-        scrollToBottom();
-    }
-    
-    const reader = new FileReader();
-    reader.onload = (event) => {
-        if ('ontouchstart' in window) {
-            const loadingElements = document.querySelectorAll('.message.system');
-            const lastLoading = loadingElements[loadingElements.length - 1];
-            if (lastLoading && lastLoading.textContent === 'Uploading image...') {
-                elements.messagesContainer.removeChild(lastLoading);
-            }
-        }
-        
-        const timestamp = Date.now();
-        const messageData = {
-            imageUrl: event.target.result,
-            senderId: currentUser.id,
-            senderName: currentUser.name,
-            timestamp: timestamp,
-            expiry: timestamp + (MESSAGE_EXPIRY_MINUTES * 60 * 1000),
-            type: 'image'
-        };
-        
-        if (replyingTo) {
-            messageData.replyTo = replyingTo;
-        }
-        
-        messagesRef.push().set(messageData).then(() => {
-            if (replyingTo) {
-                cancelReply();
-            }
-        });
-    };
-    
-    if (file.type.match('image.*')) {
-        reader.readAsDataURL(file);
-    }
-    e.target.value = '';
+function showUsernameModal() {
+    elements.usernameModal.style.display = 'flex';
+    elements.usernameInput.focus();
 }
 
-// Voice recording functions
-function startRecording() {
-    navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(stream => {
-            mediaRecorder = new MediaRecorder(stream);
-            audioChunks = [];
-            
-            mediaRecorder.ondataavailable = e => {
-                if (e.data.size > 0) audioChunks.push(e.data);
-            };
-            
-            mediaRecorder.onstop = processRecording;
-            mediaRecorder.start(100);
-            
-            elements.startRecording.style.display = 'none';
-            elements.stopRecording.style.display = 'block';
-            elements.recordingStatus.style.display = 'block';
-        })
-        .catch(err => {
-            console.error("Recording failed:", err);
-            alert("Microphone access required for voice messages");
-        });
-}
-
-function stopRecording() {
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        mediaRecorder.stop();
-        mediaRecorder.stream.getTracks().forEach(track => track.stop());
-    }
-}
-
-function processRecording() {
-    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-    const reader = new FileReader();
-    
-    reader.onload = () => {
-        const timestamp = Date.now();
-        const messageData = {
-            type: 'voice',
-            audioData: reader.result,
-            duration: Math.round(audioBlob.size / 1000),
-            senderId: currentUser.id,
-            senderName: currentUser.name,
-            timestamp: timestamp,
-            expiry: timestamp + (MESSAGE_EXPIRY_MINUTES * 60 * 1000)
-        };
-        
-        if (replyingTo) {
-            messageData.replyTo = replyingTo;
-        }
-        
-        messagesRef.push().set(messageData).then(() => {
-            if (replyingTo) {
-                cancelReply();
-            }
-        });
-        
-        elements.startRecording.style.display = 'block';
-        elements.stopRecording.style.display = 'none';
-        elements.recordingStatus.style.display = 'none';
-        audioChunks = [];
-    };
-    
-    reader.readAsDataURL(audioBlob);
-}
-
-// Update typing status
-function updateTyping(typing) {
-    if (typing !== isTyping) {
-        isTyping = typing;
-        typingRef.child(currentUser.id).set(isTyping ? currentUser.name : null);
-        
-        if (typing) {
-            clearTimeout(lastTypingTime);
-            lastTypingTime = setTimeout(() => {
-                updateTyping(false);
-            }, 3000);
-        }
-    }
-}
-
-// Load messages
-function loadMessages() {
-    clearTimeout(expiryTimer);
-    
-    messagesRef.orderByChild('timestamp').on('child_added', (snapshot) => {
-        const message = snapshot.val();
-        const isExpired = isMessageExpired(message);
-        displayMessage(message, snapshot.key, isExpired);
-        
-        if (!expiryTimer && !isExpired) {
-            setExpiryTimer(message.timestamp);
-        }
-        
-        scrollToBottom();
-    });
-}
-
-// Check if message is expired
-function isMessageExpired(message) {
-    if (!message.timestamp) return false;
-    const messageAge = (Date.now() - message.timestamp) / (1000 * 60);
-    return messageAge > MESSAGE_EXPIRY_MINUTES;
-}
-
-// Set expiry timer
-function setExpiryTimer(oldestMessageTime) {
-    const timeElapsed = (Date.now() - oldestMessageTime) / (1000 * 60);
-    const timeRemaining = (MESSAGE_EXPIRY_MINUTES - timeElapsed) * 60 * 1000;
-    
-    if (timeRemaining > 0) {
-        expiryTimer = setTimeout(() => {
-            cleanExpiredMessages();
-        }, timeRemaining);
-    }
-}
-
-// Clean expired messages
-function cleanExpiredMessages() {
-    messagesRef.once('value', (snapshot) => {
-        const messages = snapshot.val() || {};
-        const now = Date.now();
-        
-        Object.keys(messages).forEach((key) => {
-            const message = messages[key];
-            if (message.timestamp && (now - message.timestamp) > (MESSAGE_EXPIRY_MINUTES * 60 * 1000)) {
-                messagesRef.child(key).remove();
-            }
-        });
-        
-        sendSystemMessage('Old messages have been cleared');
-        expiryTimer = null;
-    });
-}
-
-// Display message
-function displayMessage(message, messageId, isExpired = false) {
-    if (message.deleted || isExpired) return;
-    
-    const messageElement = document.createElement('div');
-    let messageContent = '';
-    
-    const timeString = new Date(message.timestamp).toLocaleTimeString([], 
-        { hour: '2-digit', minute: '2-digit' });
-
-    if (message.replyTo) {
-        messagesRef.child(message.replyTo).once('value', (snapshot) => {
-            const originalMessage = snapshot.val();
-            if (originalMessage) {
-                const replyText = originalMessage.text 
-                    ? escapeHtml(originalMessage.text.substring(0, 50)) + (originalMessage.text.length > 50 ? '...' : '')
-                    : '[Media]';
-                
-                const replyHtml = `
-                    <div class="message-reply">
-                        Replying to <span class="reply-sender">${originalMessage.senderName}</span>: ${replyText}
-                    </div>
-                `;
-                
-                if (messageElement.innerHTML.includes('message-reply')) {
-                    messageElement.querySelector('.message-reply').outerHTML = replyHtml;
-                } else {
-                    messageElement.innerHTML = replyHtml + messageElement.innerHTML;
-                }
-            }
-        });
-    }
-
-    if (message.type === 'voice') {
-        messageElement.className = `message ${message.senderId === currentUser.id ? 'sent' : 'received'}`;
-        messageContent = `
-            <audio controls src="${message.audioData}"></audio>
-            <span class="timestamp">${timeString} • ${message.senderName}</span>
-            <span class="voice-duration">${message.duration}s</span>
-        `;
-    } 
-    else if (message.type === 'image') {
-        messageElement.className = `message ${message.senderId === currentUser.id ? 'sent' : 'received'}`;
-        messageContent = `
-            <img src="${message.imageUrl}" class="message-image" alt="Sent image">
-            <span class="timestamp">${timeString} • ${message.senderName}</span>
-        `;
-    }
-    else if (message.senderId) {
-        messageElement.className = `message ${message.senderId === currentUser.id ? 'sent' : 'received'}`;
-        messageContent = `
-            <div class="message-text">${escapeHtml(message.text)}</div>
-            <span class="timestamp">${timeString} • ${message.senderName}</span>
-        `;
-        
-        if (message.senderId === currentUser.id && message.status) {
-            messageContent += `
-                <span class="message-status ${message.status}" title="${message.status === 'delivered' ? 'Delivered' : 'Read'}"></span>
-            `;
-        }
-    } 
-    else {
-        messageElement.className = `message system ${message.type || ''}`;
-        messageContent = message.text;
-    }
-
-    if (!isExpired && message.senderId && message.type !== 'system') {
-        const actionsDiv = document.createElement('div');
-        actionsDiv.className = 'message-actions';
-        
-        if (message.senderId !== currentUser.id) {
-            const replyBtn = document.createElement('button');
-            replyBtn.className = 'reply-btn';
-            replyBtn.innerHTML = '<i class="fas fa-reply"></i>';
-            replyBtn.title = 'Reply to this message';
-            replyBtn.addEventListener('click', () => {
-                setupReply(messageId, message.text || '[Media]', message.senderName);
-            });
-            actionsDiv.appendChild(replyBtn);
-        }
-        
-        if (message.senderId === currentUser.id) {
-            const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'delete-btn';
-            deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
-            deleteBtn.title = 'Delete message';
-            deleteBtn.dataset.messageId = messageId;
-            deleteBtn.addEventListener('click', () => deleteMessage(messageId));
-            actionsDiv.appendChild(deleteBtn);
-        }
-        
-        messageContent += actionsDiv.outerHTML;
-    }
-
-    messageElement.innerHTML += messageContent;
-    elements.messagesContainer.appendChild(messageElement);
-    
-    // Mark messages as read when displayed
-    if (message.senderId !== currentUser.id && !message.read) {
-        messagesRef.child(messageId).update({ read: true });
-    }
-    
-    scrollToBottom();
-}
-
-// Send system message
-function sendSystemMessage(text, type = 'system') {
-    const messageElement = document.createElement('div');
-    messageElement.className = `message system ${type}`;
-    messageElement.textContent = text;
-    elements.messagesContainer.appendChild(messageElement);
-    scrollToBottom();
-}
-
-// Delete message
-function deleteMessage(messageId) {
-    if (confirm('Are you sure you want to delete this message?')) {
-        messagesRef.child(messageId).update({ deleted: true });
-    }
-}
-
-// Scroll to bottom
-function scrollToBottom() {
-    setTimeout(() => {
-        elements.messagesContainer.scrollTop = elements.messagesContainer.scrollHeight;
-    }, 100);
-}
-
-// Escape HTML
-function escapeHtml(unsafe) {
-    return unsafe
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+function hideUsernameModal() {
+    elements.usernameModal.style.display = 'none';
 }
 
 // Handle beforeunload
 window.addEventListener('beforeunload', () => {
-    usersRef.child(currentUser.id).update({
-        isOnline: false,
-        lastActive: firebase.database.ServerValue.TIMESTAMP
-    });
+    if (currentUser.id) {
+        usersRef.child(currentUser.id).update({
+            isOnline: false,
+            lastActive: firebase.database.ServerValue.TIMESTAMP
+        });
+    }
 });
 
 // Initialize the app
