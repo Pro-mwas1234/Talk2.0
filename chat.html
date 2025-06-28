@@ -10,6 +10,39 @@
     <meta name="theme-color" content="#075E54">
 </head>
 <body>
+    <!-- Auth Modal -->
+    <div id="authModal" class="modal">
+        <div class="modal-content">
+            <h3>Login or Register</h3>
+            <div id="authTabs">
+                <button class="auth-tab active" data-tab="login">Login</button>
+                <button class="auth-tab" data-tab="register">Register</button>
+            </div>
+            
+            <div id="loginForm" class="auth-form">
+                <input type="email" id="loginEmail" placeholder="Email">
+                <input type="password" id="loginPassword" placeholder="Password">
+                <button id="loginBtn" class="primary-btn">Login</button>
+            </div>
+            
+            <div id="registerForm" class="auth-form" style="display:none;">
+                <input type="text" id="registerName" placeholder="Display Name">
+                <input type="email" id="registerEmail" placeholder="Email">
+                <input type="password" id="registerPassword" placeholder="Password (min 6 chars)">
+                <button id="registerBtn" class="primary-btn">Register</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Username Modal -->
+    <div id="usernameModal" class="modal">
+        <div class="modal-content">
+            <h3>Choose Your Username</h3>
+            <input type="text" id="usernameInput" placeholder="Username (3-15 characters)" autocomplete="username">
+            <div id="usernameAvailability"></div>
+            <button id="submitUsernameBtn" class="primary-btn">Save Username</button>
+        </div>
+    </div>
     <div class="mobile-keyboard-helper"></div>
     <div class="chat-container">
         <header class="app-header" aria-label="Chat header">
@@ -65,39 +98,7 @@
         </div>
     </div>
 
-    <!-- Auth Modal -->
-    <div id="authModal" class="modal">
-        <div class="modal-content">
-            <h3>Login or Register</h3>
-            <div id="authTabs">
-                <button class="auth-tab active" data-tab="login">Login</button>
-                <button class="auth-tab" data-tab="register">Register</button>
-            </div>
-            
-            <div id="loginForm" class="auth-form">
-                <input type="email" id="loginEmail" placeholder="Email">
-                <input type="password" id="loginPassword" placeholder="Password">
-                <button id="loginBtn" class="primary-btn">Login</button>
-            </div>
-            
-            <div id="registerForm" class="auth-form" style="display:none;">
-                <input type="text" id="registerName" placeholder="Display Name">
-                <input type="email" id="registerEmail" placeholder="Email">
-                <input type="password" id="registerPassword" placeholder="Password (min 6 chars)">
-                <button id="registerBtn" class="primary-btn">Register</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Username Modal -->
-    <div id="usernameModal" class="modal">
-        <div class="modal-content">
-            <h3>Choose Your Username</h3>
-            <input type="text" id="usernameInput" placeholder="Username (3-15 characters)" autocomplete="username">
-            <div id="usernameAvailability"></div>
-            <button id="submitUsernameBtn" class="primary-btn">Save Username</button>
-        </div>
-    </div>
+    
 
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
