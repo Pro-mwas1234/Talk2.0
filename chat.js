@@ -1,11 +1,11 @@
 // Initialize Firebase
 const firebaseConfig = {
-    apiKey: "AIzaSyAa6iZDF9wEa_CF2LDU_TEsZF6uxdDCWxg",
-    authDomain: "chat01-baa5d.firebaseapp.com",
-    databaseURL: "https://chat01-baa5d-default-rtdb.firebaseio.com",
-    projectId: "chat01-baa5d",
-    storageBucket: "chat01-baa5d.firebasestorage.app",
-    messagingSenderId: "333929510718",
+    apiKey: "AIzaSyDQ3-lEUPs00pULoClMun1gQyiFxUBajW4",
+    authDomain: "chat-d7eb8.firebaseapp.com",
+    databaseURL: "https://chat-d7eb8-default-rtdb.firebaseio.com",
+    projectId: "chat-d7eb8",
+    storageBucket: "chat-d7eb8.firebasestorage.app",
+    messagingSenderId: "963082833966",
 };
 
 firebase.initializeApp(firebaseConfig);
