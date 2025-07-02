@@ -1,4 +1,4 @@
-// Initialize Firebase
+// Firebase Configuration
 const firebaseConfig = {
   apiKey: "AIzaSyDQ3-lEUPs00pULoClMun1gQyiFxUBajW4",
   authDomain: "chat-d7eb8.firebaseapp.com",
@@ -9,11 +9,12 @@ const firebaseConfig = {
   appId: "1:963082833966:web:2e66cff175cb6ae8a64fbf"
 };
 
+// Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
 const auth = firebase.auth();
 
-// DOM elements
+// DOM Elements
 const elements = {
     messagesContainer: document.getElementById('messagesContainer'),
     messageInput: document.getElementById('messageInput'),
@@ -22,12 +23,6 @@ const elements = {
     fileInput: document.getElementById('fileInput'),
     typingIndicator: document.getElementById('typingIndicator'),
     typingUsers: document.getElementById('typingUsers'),
-    nameModal: document.getElementById('nameModal'),
-    userNameInput: document.getElementById('userNameInput'),
-    submitNameBtn: document.getElementById('submitNameBtn'),
-    startRecording: document.getElementById('startRecording'),
-    stopRecording: document.getElementById('stopRecording'),
-    recordingStatus: document.getElementById('recordingStatus'),
     darkModeToggle: document.getElementById('darkModeToggle'),
     replyPreview: document.getElementById('replyPreview'),
     cancelReply: document.getElementById('cancelReply'),
@@ -48,10 +43,13 @@ const elements = {
     usernameModal: document.getElementById('usernameModal'),
     usernameInput: document.getElementById('usernameInput'),
     usernameAvailability: document.getElementById('usernameAvailability'),
-    submitUsernameBtn: document.getElementById('submitUsernameBtn')
+    submitUsernameBtn: document.getElementById('submitUsernameBtn'),
+    startRecording: document.getElementById('startRecording'),
+    stopRecording: document.getElementById('stopRecording'),
+    recordingStatus: document.getElementById('recordingStatus')
 };
 
-// App state
+// App State
 let currentUser = {
     id: null,
     name: null,
@@ -64,46 +62,36 @@ let replyingTo = null;
 let onlineUsers = {};
 let mediaRecorder;
 let audioChunks = [];
-const MESSAGE_EXPIRY_MINUTES = 900;
 const TYPING_TIMEOUT = 3000;
+const MESSAGE_EXPIRY_MINUTES = 900;
 
-// Firebase references
+// Firebase References
 const messagesRef = database.ref('messages');
 const typingRef = database.ref('typing');
 const usersRef = database.ref('users');
 
-// Initialize app
+// Initialize App
 function init() {
-    setupAuth();
+    // Start auth listener immediately
+    auth.onAuthStateChanged(handleAuthStateChange);
+    
+    // Setup remaining functionality
     setupUsernameSelection();
     updateDarkMode();
     setupEventListeners();
     setupMobileFeatures();
     detectIOS();
     
+    // Check for MediaRecorder support
     if (!window.MediaRecorder) {
         elements.startRecording.style.display = 'none';
         console.warn("Voice recording not supported in this browser");
     }
 }
 
-// Dark mode functions
-function toggleDarkMode() {
-    const darkMode = !document.body.classList.contains('dark-mode');
-    localStorage.setItem('darkMode', darkMode);
-    updateDarkMode();
-}
-
-function updateDarkMode() {
-    const darkMode = localStorage.getItem('darkMode') === 'true';
-    document.body.classList.toggle('dark-mode', darkMode);
-    elements.darkModeToggle.innerHTML = darkMode ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
-    elements.darkModeToggle.title = darkMode ? 'Switch to light mode' : 'Switch to dark mode';
-}
-
-// Authentication functions
+// Authentication Functions
 function setupAuth() {
-    // Switch between login/register tabs
+    // Tab switching
     elements.authTabs.querySelectorAll('.auth-tab').forEach(tab => {
         tab.addEventListener('click', () => {
             elements.authTabs.querySelector('.active').classList.remove('active');
@@ -124,9 +112,6 @@ function setupAuth() {
     elements.registerPassword.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') handleRegister();
     });
-
-    // Auth state listener
-    auth.onAuthStateChanged(handleAuthStateChange);
 }
 
 function handleLogin() {
@@ -161,7 +146,6 @@ function handleRegister() {
 
     auth.createUserWithEmailAndPassword(email, password)
         .then((userCredential) => {
-            // Create user profile with temporary display name
             return usersRef.child(userCredential.user.uid).set({
                 displayName: name,
                 isOnline: true,
@@ -175,34 +159,29 @@ function handleRegister() {
 
 function handleAuthStateChange(user) {
     if (user) {
-        // User signed in
         currentUser.id = user.uid;
-        
-        // Check if user has a username
         usersRef.child(user.uid).once('value')
             .then(snapshot => {
                 const userData = snapshot.val();
-                if (userData && userData.username) {
-                    // User has username, proceed to chat
+                if (userData?.username) {
                     currentUser.name = userData.username;
                     currentUser.username = userData.username;
                     hideAuthModals();
                     loadMessages();
                     setupPresence();
                 } else {
-                    // No username set, show username modal
+                    hideAuthModals();
                     showUsernameModal();
                 }
             });
     } else {
-        // No user signed in
         showAuthModal();
     }
 }
 
-// Username management
+// Username Management
 function setupUsernameSelection() {
-    elements.usernameInput.addEventListener('input', checkUsernameAvailability);
+    elements.usernameInput.addEventListener('input', debounce(checkUsernameAvailability, 500));
     elements.submitUsernameBtn.addEventListener('click', saveUsername);
 }
 
@@ -235,7 +214,6 @@ function saveUsername() {
         return;
     }
 
-    // Check again right before saving
     usersRef.orderByChild('username').equalTo(username).once('value')
         .then(snapshot => {
             if (snapshot.exists() && Object.keys(snapshot.val())[0] !== currentUser.id) {
@@ -243,7 +221,6 @@ function saveUsername() {
                 return;
             }
 
-            // Save username to user profile
             return usersRef.child(currentUser.id).update({
                 username: username
             });
@@ -261,21 +238,18 @@ function saveUsername() {
         });
 }
 
-// User presence
+// User Presence
 function setupPresence() {
-    // Set user online
     usersRef.child(currentUser.id).update({
         isOnline: true,
         lastActive: firebase.database.ServerValue.TIMESTAMP
     });
 
-    // Setup disconnect handler
     usersRef.child(currentUser.id).onDisconnect().update({
         isOnline: false,
         lastActive: firebase.database.ServerValue.TIMESTAMP
     });
 
-    // Heartbeat to keep presence active
     setInterval(() => {
         if (currentUser.id) {
             usersRef.child(currentUser.id).update({
@@ -284,7 +258,6 @@ function setupPresence() {
         }
     }, 30000);
 
-    // Load online users
     usersRef.orderByChild('isOnline').equalTo(true).on('value', (snapshot) => {
         onlineUsers = {};
         elements.onlineUsersList.innerHTML = '';
@@ -306,7 +279,7 @@ function setupPresence() {
     });
 }
 
-// Message functions
+// Message Functions
 function sendMessage() {
     const messageText = elements.messageInput.value.trim();
     if (!messageText || !currentUser.id) return;
@@ -351,26 +324,8 @@ function handleFileUpload(e) {
         return;
     }
 
-    // Show loading indicator for mobile
-    if ('ontouchstart' in window) {
-        const loading = document.createElement('div');
-        loading.className = 'message system';
-        loading.textContent = 'Uploading image...';
-        elements.messagesContainer.appendChild(loading);
-        scrollToBottom();
-    }
-
     const reader = new FileReader();
     reader.onload = (event) => {
-        // Remove loading indicator if exists
-        if ('ontouchstart' in window) {
-            const loadingElements = document.querySelectorAll('.message.system');
-            const lastLoading = loadingElements[loadingElements.length - 1];
-            if (lastLoading && lastLoading.textContent === 'Uploading image...') {
-                elements.messagesContainer.removeChild(lastLoading);
-            }
-        }
-
         const timestamp = Date.now();
         const messageData = {
             imageUrl: event.target.result,
@@ -398,7 +353,7 @@ function handleFileUpload(e) {
     e.target.value = '';
 }
 
-// Typing indicators
+// Typing Indicators
 function updateTyping(typing) {
     if (!currentUser.id) return;
     
@@ -407,7 +362,6 @@ function updateTyping(typing) {
         typingRef.child(currentUser.id).set(isTyping ? currentUser.username || currentUser.name : null);
     }
     
-    // Reset typing timeout
     clearTimeout(lastTypingTime);
     if (typing) {
         lastTypingTime = setTimeout(() => {
@@ -416,7 +370,7 @@ function updateTyping(typing) {
     }
 }
 
-// Message display
+// Message Display
 function loadMessages() {
     clearTimeout(expiryTimer);
     
@@ -432,7 +386,6 @@ function loadMessages() {
         scrollToBottom();
     });
 
-    // Typing indicators
     typingRef.on('value', (snapshot) => {
         const typingData = snapshot.val() || {};
         elements.typingUsers.innerHTML = '';
@@ -467,7 +420,6 @@ function displayMessage(message, messageId, isExpired = false) {
     const timeString = new Date(message.timestamp).toLocaleTimeString([], 
         { hour: '2-digit', minute: '2-digit' });
 
-    // Handle reply context if exists
     if (message.replyTo) {
         messagesRef.child(message.replyTo).once('value', (snapshot) => {
             const originalMessage = snapshot.val();
@@ -492,7 +444,6 @@ function displayMessage(message, messageId, isExpired = false) {
         });
     }
 
-    // Create message content based on type
     if (message.type === 'voice') {
         messageElement.className = `message ${message.senderId === currentUser.id ? 'sent' : 'received'}`;
         messageContent = `
@@ -523,7 +474,6 @@ function displayMessage(message, messageId, isExpired = false) {
             <span class="timestamp">${timeString}</span>
         `;
         
-        // Add status indicator for user's own messages
         if (message.senderId === currentUser.id && message.status) {
             messageContent += `
                 <span class="message-status ${message.status}" title="${message.status === 'delivered' ? 'Delivered' : 'Read'}"></span>
@@ -531,17 +481,14 @@ function displayMessage(message, messageId, isExpired = false) {
         }
     } 
     else {
-        // System message
         messageElement.className = `message system ${message.type || ''}`;
         messageContent = message.text;
     }
 
-    // Add action buttons (reply, delete) if applicable
     if (!isExpired && message.senderId && message.type !== 'system') {
         const actionsDiv = document.createElement('div');
         actionsDiv.className = 'message-actions';
         
-        // Add reply button for received messages
         if (message.senderId !== currentUser.id) {
             const replyBtn = document.createElement('button');
             replyBtn.className = 'reply-btn';
@@ -553,7 +500,6 @@ function displayMessage(message, messageId, isExpired = false) {
             actionsDiv.appendChild(replyBtn);
         }
         
-        // Add delete button for user's own messages
         if (message.senderId === currentUser.id) {
             const deleteBtn = document.createElement('button');
             deleteBtn.className = 'delete-btn';
@@ -570,13 +516,12 @@ function displayMessage(message, messageId, isExpired = false) {
     messageElement.innerHTML += messageContent;
     elements.messagesContainer.appendChild(messageElement);
     
-    // Mark messages as read when displayed
     if (message.senderId !== currentUser.id && !message.read) {
         messagesRef.child(messageId).update({ read: true });
     }
 }
 
-// Message management
+// Message Management
 function deleteMessage(messageId) {
     if (confirm('Are you sure you want to delete this message?')) {
         messagesRef.child(messageId).update({ deleted: true });
@@ -596,7 +541,7 @@ function cancelReply() {
     replyingTo = null;
 }
 
-// Voice recording
+// Voice Recording
 function startRecording() {
     navigator.mediaDevices.getUserMedia({ audio: true })
         .then(stream => {
@@ -608,9 +553,8 @@ function startRecording() {
             };
             
             mediaRecorder.onstop = processRecording;
-            mediaRecorder.start(100); // Collect data every 100ms
+            mediaRecorder.start(100);
             
-            // Update UI
             elements.startRecording.style.display = 'none';
             elements.stopRecording.style.display = 'block';
             elements.recordingStatus.style.display = 'block';
@@ -637,7 +581,7 @@ function processRecording() {
         const messageData = {
             type: 'voice',
             audioData: reader.result,
-            duration: Math.round(audioBlob.size / 1000), // Approximate duration in seconds
+            duration: Math.round(audioBlob.size / 1000),
             senderId: currentUser.id,
             senderName: currentUser.username || currentUser.name,
             timestamp: timestamp
@@ -657,7 +601,6 @@ function processRecording() {
                 console.error("Error sending voice message:", error);
             });
         
-        // Reset UI
         elements.startRecording.style.display = 'block';
         elements.stopRecording.style.display = 'none';
         elements.recordingStatus.style.display = 'none';
@@ -667,7 +610,15 @@ function processRecording() {
     reader.readAsDataURL(audioBlob);
 }
 
-// Utility functions
+// Utility Functions
+function debounce(func, timeout = 300) {
+    let timer;
+    return (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => { func.apply(this, args); }, timeout);
+    };
+}
+
 function isMessageExpired(message) {
     if (!message.timestamp) return false;
     const messageAge = (Date.now() - message.timestamp) / (1000 * 60);
@@ -727,38 +678,23 @@ function escapeHtml(unsafe) {
 
 // UI Helpers
 function setupEventListeners() {
-    // Dark mode toggle
     elements.darkModeToggle.addEventListener('click', toggleDarkMode);
-    
-    // Message sending
     elements.sendButton.addEventListener('click', sendMessage);
     elements.messageInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter' && !elements.sendButton.disabled) {
             sendMessage();
         }
     });
-
-    // Typing indicator
     elements.messageInput.addEventListener('input', () => {
         elements.sendButton.disabled = elements.messageInput.value.trim() === '';
         updateTyping(elements.messageInput.value.trim() !== '');
     });
-
-    // File attachment
     elements.attachButton.addEventListener('click', () => elements.fileInput.click());
     elements.fileInput.addEventListener('change', handleFileUpload);
-    
-    // Voice recording
     elements.startRecording.addEventListener('click', startRecording);
     elements.stopRecording.addEventListener('click', stopRecording);
-    
-    // Reply functionality
     elements.cancelReply.addEventListener('click', cancelReply);
-    
-    // Online users panel
     elements.onlineUsersToggle.addEventListener('click', toggleOnlineUsersPanel);
-    
-    // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && replyingTo) {
             cancelReply();
@@ -795,10 +731,8 @@ function setupMobileFeatures() {
         }
     });
     
-    // Better touch handling
     document.addEventListener('touchstart', function() {}, {passive: true});
     
-    // Prevent double-tap zoom
     let lastTouch = 0;
     document.addEventListener('touchend', (event) => {
         const now = Date.now();
@@ -808,7 +742,6 @@ function setupMobileFeatures() {
         lastTouch = now;
     }, {passive: false});
     
-    // Mobile-specific event listeners
     if ('ontouchstart' in window) {
         elements.onlineUsersToggle.addEventListener('touchstart', (e) => {
             e.preventDefault();
@@ -825,26 +758,41 @@ function detectIOS() {
     }
 }
 
+// Dark Mode
+function toggleDarkMode() {
+    const darkMode = !document.body.classList.contains('dark-mode');
+    localStorage.setItem('darkMode', darkMode);
+    updateDarkMode();
+}
+
+function updateDarkMode() {
+    const darkMode = localStorage.getItem('darkMode') === 'true';
+    document.body.classList.toggle('dark-mode', darkMode);
+    elements.darkModeToggle.innerHTML = darkMode ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+    elements.darkModeToggle.title = darkMode ? 'Switch to light mode' : 'Switch to dark mode';
+}
+
+// Modal Control
 function showAuthModal() {
-    elements.authModal.style.display = 'flex';
+    elements.authModal.classList.add('show');
     elements.loginEmail.focus();
 }
 
 function hideAuthModals() {
-    elements.authModal.style.display = 'none';
-    elements.usernameModal.style.display = 'none';
+    elements.authModal.classList.remove('show');
+    elements.usernameModal.classList.remove('show');
 }
 
 function showUsernameModal() {
-    elements.usernameModal.style.display = 'flex';
+    elements.usernameModal.classList.add('show');
     elements.usernameInput.focus();
 }
 
 function hideUsernameModal() {
-    elements.usernameModal.style.display = 'none';
+    elements.usernameModal.classList.remove('show');
 }
 
-// Handle beforeunload
+// Cleanup on exit
 window.addEventListener('beforeunload', () => {
     if (currentUser.id) {
         usersRef.child(currentUser.id).update({
@@ -854,5 +802,5 @@ window.addEventListener('beforeunload', () => {
     }
 });
 
-// Initialize the app
+// Initialize
 document.addEventListener('DOMContentLoaded', init);
