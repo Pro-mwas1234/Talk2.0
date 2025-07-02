@@ -65,8 +65,8 @@
         </div>
     </div>
 
-    <!-- Auth Modal -->
-    <div id="authModal" class="modal">
+    <!-- Auth Modal (shown by default) -->
+    <div id="authModal" class="modal show">
         <div class="modal-content">
             <h3>Login or Register</h3>
             <div id="authTabs">
@@ -75,25 +75,25 @@
             </div>
             
             <div id="loginForm" class="auth-form">
-                <input type="email" id="loginEmail" placeholder="Email">
-                <input type="password" id="loginPassword" placeholder="Password">
+                <input type="email" id="loginEmail" placeholder="Email" required>
+                <input type="password" id="loginPassword" placeholder="Password" required>
                 <button id="loginBtn" class="primary-btn">Login</button>
             </div>
             
             <div id="registerForm" class="auth-form" style="display:none;">
-                <input type="text" id="registerName" placeholder="Display Name">
-                <input type="email" id="registerEmail" placeholder="Email">
-                <input type="password" id="registerPassword" placeholder="Password (min 6 chars)">
+                <input type="text" id="registerName" placeholder="Display Name" required>
+                <input type="email" id="registerEmail" placeholder="Email" required>
+                <input type="password" id="registerPassword" placeholder="Password (min 6 chars)" required minlength="6">
                 <button id="registerBtn" class="primary-btn">Register</button>
             </div>
         </div>
     </div>
 
-    <!-- Username Modal -->
+    <!-- Username Modal (hidden by default) -->
     <div id="usernameModal" class="modal">
         <div class="modal-content">
             <h3>Choose Your Username</h3>
-            <input type="text" id="usernameInput" placeholder="Username (3-15 characters)" autocomplete="username">
+            <input type="text" id="usernameInput" placeholder="Username (3-15 characters)" autocomplete="username" required minlength="3" maxlength="15">
             <div id="usernameAvailability"></div>
             <button id="submitUsernameBtn" class="primary-btn">Save Username</button>
         </div>
