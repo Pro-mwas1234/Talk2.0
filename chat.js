@@ -1,19 +1,12 @@
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyDQ3-lEUPs00pULoClMun1gQyiFxUBajW4",
-  authDomain: "chat-d7eb8.firebaseapp.com",
-  databaseURL: "https://chat-d7eb8-default-rtdb.firebaseio.com",
-  projectId: "chat-d7eb8",
-  storageBucket: "chat-d7eb8.firebasestorage.app",
-  messagingSenderId: "963082833966",
-  appId: "1:963082833966:web:59da55e277fa7324a64fbf"
+  apiKey: "AIzaSyDrltFCORxJ5HpGMlho7FWj1Pk1G0BjLso",
+  authDomain: "nini-1bbf7.firebaseapp.com",
+  projectId: "nini-1bbf7",
+  storageBucket: "nini-1bbf7.firebasestorage.app",
+  messagingSenderId: "330113060420",
+  appId: "1:330113060420:web:7eca36a70c81c63237b611",
+  measurementId: "G-ZMCHFDQGDV"
 };
-
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
