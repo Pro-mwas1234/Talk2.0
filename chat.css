@@ -15,7 +15,6 @@
     --success-color: #4CAF50;
 }
 
-/* Dark mode variables */
 .dark-mode {
     --primary-color: #128C7E;
     --primary-dark: #075E54;
@@ -250,6 +249,23 @@ body {
     background-color: #cccccc;
     cursor: not-allowed;
     transform: none;
+}
+
+/* Emoji Picker */
+emoji-picker {
+    --background: var(--input-bg);
+    --border-color: var(--timestamp-color);
+    --num-columns: 8;
+    --emoji-size: 1.5rem;
+    position: absolute;
+    bottom: 70px;
+    right: 10px;
+    z-index: 1000;
+    display: none;
+}
+
+emoji-picker.active {
+    display: block;
 }
 
 /* Modals */
