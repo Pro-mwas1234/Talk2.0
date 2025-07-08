@@ -46,7 +46,10 @@ const elements = {
     submitUsernameBtn: document.getElementById('submitUsernameBtn'),
     startRecording: document.getElementById('startRecording'),
     stopRecording: document.getElementById('stopRecording'),
-    recordingStatus: document.getElementById('recordingStatus')
+    recordingStatus: document.getElementById('recordingStatus'),
+    emojiButton: document.getElementById('emojiButton'),
+    emojiPicker: document.getElementById('emojiPicker'),
+    chatTitle: document.getElementById('chatTitle')
 };
 
 // App State
@@ -76,17 +79,40 @@ function init() {
     auth.onAuthStateChanged(handleAuthStateChange);
     
     // Setup remaining functionality
+    setupAuth();
     setupUsernameSelection();
     updateDarkMode();
     setupEventListeners();
     setupMobileFeatures();
     detectIOS();
+    setupEmojiPicker();
     
     // Check for MediaRecorder support
     if (!window.MediaRecorder) {
         elements.startRecording.style.display = 'none';
         console.warn("Voice recording not supported in this browser");
     }
+}
+
+// Emoji Picker Setup
+function setupEmojiPicker() {
+    elements.emojiButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        elements.emojiPicker.classList.toggle('active');
+    });
+
+    elements.emojiPicker.addEventListener('emoji-click', (event) => {
+        const emoji = event.detail.unicode;
+        elements.messageInput.value += emoji;
+        elements.emojiPicker.classList.remove('active');
+        elements.messageInput.focus();
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!elements.emojiButton.contains(e.target) && !elements.emojiPicker.contains(e.target)) {
+            elements.emojiPicker.classList.remove('active');
+        }
+    });
 }
 
 // Authentication Functions
@@ -673,7 +699,8 @@ function escapeHtml(unsafe) {
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+        .replace(/'/g, "&#039;")
+        .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}]/gu, match => match);
 }
 
 // UI Helpers
