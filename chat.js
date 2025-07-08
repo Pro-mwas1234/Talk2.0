@@ -1,12 +1,14 @@
+// Firebase Configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyDrltFCORxJ5HpGMlho7FWj1Pk1G0BjLso",
-  authDomain: "nini-1bbf7.firebaseapp.com",
-  projectId: "nini-1bbf7",
-  storageBucket: "nini-1bbf7.firebasestorage.app",
-  messagingSenderId: "330113060420",
-  appId: "1:330113060420:web:7eca36a70c81c63237b611",
-  measurementId: "G-ZMCHFDQGDV"
+  apiKey: "AIzaSyDQ3-lEUPs00pULoClMun1gQyiFxUBajW4",
+  authDomain: "chat-d7eb8.firebaseapp.com",
+  databaseURL: "https://chat-d7eb8-default-rtdb.firebaseio.com",
+  projectId: "chat-d7eb8",
+  storageBucket: "chat-d7eb8.firebasestorage.app",
+  messagingSenderId: "963082833966",
+  appId: "1:963082833966:web:2e66cff175cb6ae8a64fbf"
 };
+
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
@@ -17,6 +19,8 @@ const elements = {
     messagesContainer: document.getElementById('messagesContainer'),
     messageInput: document.getElementById('messageInput'),
     sendButton: document.getElementById('sendButton'),
+    emojiButton: document.getElementById('emojiButton'),
+    emojiPicker: document.getElementById('emojiPicker'),
     attachButton: document.getElementById('attachButton'),
     fileInput: document.getElementById('fileInput'),
     typingIndicator: document.getElementById('typingIndicator'),
@@ -45,8 +49,6 @@ const elements = {
     startRecording: document.getElementById('startRecording'),
     stopRecording: document.getElementById('stopRecording'),
     recordingStatus: document.getElementById('recordingStatus'),
-    emojiButton: document.getElementById('emojiButton'),
-    emojiPicker: document.getElementById('emojiPicker'),
     chatTitle: document.getElementById('chatTitle')
 };
 
@@ -70,13 +72,11 @@ const MESSAGE_EXPIRY_MINUTES = 900;
 const messagesRef = database.ref('messages');
 const typingRef = database.ref('typing');
 const usersRef = database.ref('users');
+const usernamesRef = database.ref('usernames');
 
 // Initialize App
 function init() {
-    // Start auth listener immediately
     auth.onAuthStateChanged(handleAuthStateChange);
-    
-    // Setup remaining functionality
     setupAuth();
     setupUsernameSelection();
     updateDarkMode();
@@ -85,32 +85,10 @@ function init() {
     detectIOS();
     setupEmojiPicker();
     
-    // Check for MediaRecorder support
     if (!window.MediaRecorder) {
         elements.startRecording.style.display = 'none';
         console.warn("Voice recording not supported in this browser");
     }
-}
-
-// Emoji Picker Setup
-function setupEmojiPicker() {
-    elements.emojiButton.addEventListener('click', (e) => {
-        e.stopPropagation();
-        elements.emojiPicker.classList.toggle('active');
-    });
-
-    elements.emojiPicker.addEventListener('emoji-click', (event) => {
-        const emoji = event.detail.unicode;
-        elements.messageInput.value += emoji;
-        elements.emojiPicker.classList.remove('active');
-        elements.messageInput.focus();
-    });
-
-    document.addEventListener('click', (e) => {
-        if (!elements.emojiButton.contains(e.target) && !elements.emojiPicker.contains(e.target)) {
-            elements.emojiPicker.classList.remove('active');
-        }
-    });
 }
 
 // Authentication Functions
@@ -138,7 +116,7 @@ function setupAuth() {
     });
 }
 
-function handleLogin() {
+async function handleLogin() {
     const email = elements.loginEmail.value;
     const password = elements.loginPassword.value;
     
@@ -147,13 +125,16 @@ function handleLogin() {
         return;
     }
 
-    auth.signInWithEmailAndPassword(email, password)
-        .catch(error => {
-            alert(error.message);
-        });
+    try {
+        const userCredential = await auth.signInWithEmailAndPassword(email, password);
+        console.log("User logged in:", userCredential.user);
+    } catch (error) {
+        console.error("Login error:", error);
+        alert(getAuthErrorMessage(error.code));
+    }
 }
 
-function handleRegister() {
+async function handleRegister() {
     const name = elements.registerName.value.trim();
     const email = elements.registerEmail.value;
     const password = elements.registerPassword.value;
@@ -168,38 +149,126 @@ function handleRegister() {
         return;
     }
 
-    auth.createUserWithEmailAndPassword(email, password)
-        .then((userCredential) => {
-            return usersRef.child(userCredential.user.uid).set({
-                displayName: name,
-                isOnline: true,
-                joinedAt: firebase.database.ServerValue.TIMESTAMP
-            });
-        })
-        .catch(error => {
-            alert(error.message);
+    try {
+        // 1. Create auth account
+        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+        
+        // 2. Store basic user info without username first
+        await usersRef.child(userCredential.user.uid).set({
+            displayName: name,
+            email: email,
+            isOnline: false, // Not fully registered yet
+            joinedAt: firebase.database.ServerValue.TIMESTAMP
         });
+
+        // 3. Hide auth modal and show username modal
+        hideAuthModals();
+        showUsernameModal();
+        
+        // 4. Set current user (without username yet)
+        currentUser = {
+            id: userCredential.user.uid,
+            name: name,
+            username: null
+        };
+
+    } catch (error) {
+        console.error("Registration error:", error);
+        alert(getAuthErrorMessage(error.code));
+    }
 }
 
-function handleAuthStateChange(user) {
+async function saveUsername() {
+    const username = elements.usernameInput.value.trim();
+    
+    if (username.length < 3 || username.length > 15) {
+        alert('Username must be 3-15 characters');
+        return;
+    }
+
+    try {
+        // Check if username exists (case insensitive)
+        const snapshot = await usersRef.orderByChild('usernameLower').equalTo(username.toLowerCase()).once('value');
+        
+        if (snapshot.exists()) {
+            alert('Username is already taken');
+            return;
+        }
+
+        // Update user with username
+        await usersRef.child(currentUser.id).update({
+            username: username,
+            usernameLower: username.toLowerCase(),
+            isOnline: true // Now fully registered
+        });
+
+        // Add to usernames collection for uniqueness check
+        await usernamesRef.child(username.toLowerCase()).set(currentUser.id);
+
+        // Update current user
+        currentUser.username = username;
+        currentUser.name = username;
+        
+        // Hide modals and initialize chat
+        hideUsernameModal();
+        loadMessages();
+        setupPresence();
+        
+    } catch (error) {
+        console.error("Error saving username:", error);
+        alert("Error saving username. Please try again.");
+    }
+}
+
+async function handleAuthStateChange(user) {
     if (user) {
         currentUser.id = user.uid;
-        usersRef.child(user.uid).once('value')
-            .then(snapshot => {
-                const userData = snapshot.val();
-                if (userData?.username) {
-                    currentUser.name = userData.username;
-                    currentUser.username = userData.username;
-                    hideAuthModals();
-                    loadMessages();
-                    setupPresence();
-                } else {
-                    hideAuthModals();
-                    showUsernameModal();
-                }
-            });
+        
+        try {
+            const snapshot = await usersRef.child(user.uid).once('value');
+            const userData = snapshot.val();
+            
+            if (!userData) {
+                // User auth exists but no database record
+                await auth.signOut();
+                showAuthModal();
+                return;
+            }
+            
+            if (userData.username) {
+                // Fully registered user
+                currentUser.name = userData.username;
+                currentUser.username = userData.username;
+                hideAuthModals();
+                loadMessages();
+                setupPresence();
+            } else {
+                // Needs to set username
+                hideAuthModals();
+                showUsernameModal();
+            }
+        } catch (error) {
+            console.error("Error checking user data:", error);
+            await auth.signOut();
+            showAuthModal();
+        }
     } else {
+        // No user signed in
+        currentUser = { id: null, name: null, username: null };
         showAuthModal();
+    }
+}
+
+function getAuthErrorMessage(errorCode) {
+    switch(errorCode) {
+        case 'auth/invalid-email': return 'Invalid email address';
+        case 'auth/user-disabled': return 'Account disabled';
+        case 'auth/user-not-found': return 'Account not found';
+        case 'auth/wrong-password': return 'Incorrect password';
+        case 'auth/email-already-in-use': return 'Email already in use';
+        case 'auth/weak-password': return 'Password too weak';
+        case 'auth/operation-not-allowed': return 'Email/password accounts not enabled';
+        default: return 'Authentication error';
     }
 }
 
@@ -218,47 +287,15 @@ function checkUsernameAvailability() {
         return;
     }
 
-    usersRef.orderByChild('username').equalTo(username).once('value')
+    usersRef.orderByChild('usernameLower').equalTo(username.toLowerCase()).once('value')
         .then(snapshot => {
-            if (snapshot.exists() && Object.keys(snapshot.val())[0] !== currentUser.id) {
+            if (snapshot.exists()) {
                 elements.usernameAvailability.textContent = 'Username already taken';
                 elements.usernameAvailability.className = 'username-taken';
             } else {
                 elements.usernameAvailability.textContent = 'Username available';
                 elements.usernameAvailability.className = 'username-available';
             }
-        });
-}
-
-function saveUsername() {
-    const username = elements.usernameInput.value.trim();
-    
-    if (username.length < 3 || username.length > 15) {
-        alert('Username must be 3-15 characters');
-        return;
-    }
-
-    usersRef.orderByChild('username').equalTo(username).once('value')
-        .then(snapshot => {
-            if (snapshot.exists() && Object.keys(snapshot.val())[0] !== currentUser.id) {
-                alert('Username is already taken');
-                return;
-            }
-
-            return usersRef.child(currentUser.id).update({
-                username: username
-            });
-        })
-        .then(() => {
-            currentUser.name = username;
-            currentUser.username = username;
-            hideUsernameModal();
-            loadMessages();
-            setupPresence();
-        })
-        .catch(error => {
-            console.error("Error saving username:", error);
-            alert("Error saving username. Please try again.");
         });
 }
 
@@ -632,6 +669,27 @@ function processRecording() {
     };
     
     reader.readAsDataURL(audioBlob);
+}
+
+// Emoji Picker
+function setupEmojiPicker() {
+    elements.emojiButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        elements.emojiPicker.classList.toggle('active');
+    });
+
+    elements.emojiPicker.addEventListener('emoji-click', (event) => {
+        const emoji = event.detail.unicode;
+        elements.messageInput.value += emoji;
+        elements.emojiPicker.classList.remove('active');
+        elements.messageInput.focus();
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!elements.emojiButton.contains(e.target) && !elements.emojiPicker.contains(e.target)) {
+            elements.emojiPicker.classList.remove('active');
+        }
+    });
 }
 
 // Utility Functions
