@@ -12,6 +12,7 @@
 <body>
     <div class="mobile-keyboard-helper"></div>
     <div class="chat-container">
+        <!-- Header -->
         <header class="app-header">
             <div class="header-left">
                 <button id="onlineUsersToggle" class="icon-button" title="Show online users">
@@ -28,8 +29,10 @@
             </button>
         </header>
         
+        <!-- Messages -->
         <div class="messages-container" id="messagesContainer"></div>
         
+        <!-- UI Elements -->
         <div id="typingIndicator" class="typing-indicator">
             <div id="typingUsers"></div>
         </div>
@@ -47,6 +50,7 @@
             <span class="pulsing-dot"></span> Recording...
         </div>
         
+        <!-- Input Area -->
         <div class="input-container">
             <button id="emojiButton" class="icon-button" title="Emoji">
                 <i class="fas fa-smile"></i>
@@ -96,7 +100,8 @@
     <div id="usernameModal" class="modal">
         <div class="modal-content">
             <h3>Choose Your Username</h3>
-            <input type="text" id="usernameInput" placeholder="Username (3-15 characters)" autocomplete="username" required minlength="3" maxlength="15">
+            <input type="text" id="usernameInput" placeholder="Username (3-15 characters)" 
+                   pattern="[a-zA-Z0-9_]{3,15}" title="3-15 alphanumeric characters" required>
             <div id="usernameAvailability"></div>
             <button id="submitUsernameBtn" class="primary-btn">Save Username</button>
         </div>
