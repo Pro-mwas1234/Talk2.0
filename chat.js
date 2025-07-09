@@ -1,12 +1,12 @@
 // Firebase Configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyDrltFCORxJ5HpGMlho7FWj1Pk1G0BjLso",
-  authDomain: "nini-1bbf7.firebaseapp.com",
-  projectId: "nini-1bbf7",
-  storageBucket: "nini-1bbf7.firebasestorage.app",
-  messagingSenderId: "330113060420",
-  appId: "1:330113060420:web:7eca36a70c81c63237b611",
-  measurementId: "G-ZMCHFDQGDV"
+  apiKey: "AIzaSyDQ3-lEUPs00pULoClMun1gQyiFxUBajW4",
+  authDomain: "chat-d7eb8.firebaseapp.com",
+  databaseURL: "https://chat-d7eb8-default-rtdb.firebaseio.com",
+  projectId: "chat-d7eb8",
+  storageBucket: "chat-d7eb8.appspot.com",
+  messagingSenderId: "963082833966",
+  appId: "1:963082833966:web:2e66cff175cb6ae8a64fbf"
 };
 
 // Initialize Firebase
@@ -49,14 +49,16 @@ const elements = {
     startRecording: document.getElementById('startRecording'),
     stopRecording: document.getElementById('stopRecording'),
     recordingStatus: document.getElementById('recordingStatus'),
-    chatTitle: document.getElementById('chatTitle')
+    chatTitle: document.getElementById('chatTitle'),
+    notificationBadge: document.getElementById('notification-badge')
 };
 
 // App State
 let currentUser = {
     id: null,
     name: null,
-    username: null
+    username: null,
+    isAuthenticated: false
 };
 let isTyping = false;
 let lastTypingTime = 0;
@@ -67,6 +69,13 @@ let mediaRecorder;
 let audioChunks = [];
 const TYPING_TIMEOUT = 3000;
 const MESSAGE_EXPIRY_MINUTES = 900;
+let failedAuthAttempts = 0;
+const MAX_AUTH_ATTEMPTS = 5;
+const AUTH_TIMEOUT = 30000;
+let lastMessageTimestamp = 0;
+let notificationPermission = false;
+let unreadCount = 0;
+const notificationSound = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-alarm-digital-clock-beep-989.mp3');
 
 // Firebase References
 const messagesRef = database.ref('messages');
@@ -74,8 +83,50 @@ const typingRef = database.ref('typing');
 const usersRef = database.ref('users');
 const usernamesRef = database.ref('usernames');
 
+// Check notification permission
+function checkNotificationPermission() {
+    if ('Notification' in window) {
+        Notification.requestPermission().then(permission => {
+            notificationPermission = permission === 'granted';
+            if (!notificationPermission) {
+                console.log('Notification permission denied');
+            }
+        });
+    }
+}
+
+// Show notification for new message
+function showNotification(message) {
+    if (!document.hasFocus() && notificationPermission) {
+        const notification = new Notification('New Message', {
+            body: `${message.senderName}: ${message.text || '[Media]'}`,
+            icon: 'https://cdn-icons-png.flaticon.com/512/733/733585.png'
+        });
+        notificationSound.play();
+        
+        notification.onclick = () => {
+            window.focus();
+            notification.close();
+            resetUnreadCount();
+        };
+    }
+    
+    // Update badge count
+    if (!document.hasFocus()) {
+        unreadCount++;
+        elements.notificationBadge.textContent = unreadCount;
+        elements.notificationBadge.style.display = 'flex';
+    }
+}
+
+function resetUnreadCount() {
+    unreadCount = 0;
+    elements.notificationBadge.style.display = 'none';
+}
+
 // Initialize App
 function init() {
+    checkNotificationPermission();
     auth.onAuthStateChanged(handleAuthStateChange);
     setupAuth();
     setupUsernameSelection();
@@ -89,11 +140,13 @@ function init() {
         elements.startRecording.style.display = 'none';
         console.warn("Voice recording not supported in this browser");
     }
+    
+    // Reset badge when window gets focus
+    window.addEventListener('focus', resetUnreadCount);
 }
 
 // Authentication Functions
 function setupAuth() {
-    // Tab switching
     elements.authTabs.querySelectorAll('.auth-tab').forEach(tab => {
         tab.addEventListener('click', () => {
             elements.authTabs.querySelector('.active').classList.remove('active');
@@ -103,52 +156,77 @@ function setupAuth() {
         });
     });
 
-    // Login handler
     elements.loginBtn.addEventListener('click', handleLogin);
     elements.loginPassword.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') handleLogin();
     });
 
-    // Register handler
     elements.registerBtn.addEventListener('click', handleRegister);
     elements.registerPassword.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') handleRegister();
     });
+
+    const resetLink = document.createElement('a');
+    resetLink.href = '#';
+    resetLink.textContent = 'Forgot password?';
+    resetLink.className = 'reset-password';
+    resetLink.addEventListener('click', handlePasswordReset);
+    elements.loginForm.appendChild(resetLink);
 }
 
 async function handleLogin() {
-    const email = elements.loginEmail.value;
+    if (failedAuthAttempts >= MAX_AUTH_ATTEMPTS) {
+        alert(`Too many attempts. Please wait ${AUTH_TIMEOUT/1000} seconds.`);
+        return;
+    }
+
+    const email = elements.loginEmail.value.trim();
     const password = elements.loginPassword.value;
-    
-    if (!email || !password) {
-        alert('Please enter both email and password');
+
+    if (!validateEmail(email)) {
+        alert('Please enter a valid email address');
         return;
     }
 
     try {
-        await auth.signInWithEmailAndPassword(email, password);
+        const userCredential = await auth.signInWithEmailAndPassword(email, password);
+        failedAuthAttempts = 0;
+        return userCredential;
     } catch (error) {
+        failedAuthAttempts++;
         console.error("Login error:", error);
-        alert(getAuthErrorMessage(error.code));
+        alert(getEnhancedAuthErrorMessage(error.code));
+        
+        if (failedAuthAttempts >= MAX_AUTH_ATTEMPTS) {
+            setTimeout(() => {
+                failedAuthAttempts = 0;
+            }, AUTH_TIMEOUT);
+        }
+        throw error;
     }
 }
 
 async function handleRegister() {
     const name = elements.registerName.value.trim();
-    const email = elements.registerEmail.value;
+    const email = elements.registerEmail.value.trim();
     const password = elements.registerPassword.value;
-    
+
     if (!name || !email || !password) {
         alert('Please fill all fields');
         return;
     }
 
-    if (password.length < 6) {
-        alert('Password must be at least 6 characters');
+    if (!validateEmail(email)) {
+        alert('Please enter a valid email address');
         return;
     }
 
     try {
+        const methods = await auth.fetchSignInMethodsForEmail(email);
+        if (methods.length > 0) {
+            throw new Error('auth/email-already-in-use');
+        }
+
         const userCredential = await auth.createUserWithEmailAndPassword(email, password);
         await usersRef.child(userCredential.user.uid).set({
             displayName: name,
@@ -161,10 +239,50 @@ async function handleRegister() {
         showUsernameModal();
         currentUser.id = userCredential.user.uid;
         currentUser.name = name;
+        return userCredential;
     } catch (error) {
         console.error("Registration error:", error);
-        alert(getAuthErrorMessage(error.code));
+        alert(getEnhancedAuthErrorMessage(error.code || error.message));
+        throw error;
     }
+}
+
+async function handlePasswordReset() {
+    const email = prompt('Enter your email to reset password:');
+    if (!email) return;
+
+    if (!validateEmail(email)) {
+        alert('Please enter a valid email address');
+        return;
+    }
+
+    try {
+        await auth.sendPasswordResetEmail(email);
+        alert('Password reset email sent! Check your inbox.');
+    } catch (error) {
+        console.error("Password reset error:", error);
+        alert(getEnhancedAuthErrorMessage(error.code));
+    }
+}
+
+function validateEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function getEnhancedAuthErrorMessage(errorCode) {
+    const messages = {
+        'auth/invalid-email': 'Invalid email address format',
+        'auth/user-disabled': 'Account disabled. Contact support.',
+        'auth/user-not-found': 'No account found with this email',
+        'auth/wrong-password': 'Incorrect password. Try again or reset password.',
+        'auth/email-already-in-use': 'Email already in use. Try logging in.',
+        'auth/weak-password': 'Password must be at least 6 characters',
+        'auth/operation-not-allowed': 'Email/password accounts not enabled',
+        'auth/too-many-requests': 'Too many attempts. Try again later.',
+        'auth/network-request-failed': 'Network error. Check your connection.',
+        'default': 'Authentication failed. Please try again.'
+    };
+    return messages[errorCode] || messages['default'];
 }
 
 // Username Management
@@ -207,29 +325,33 @@ async function saveUsername() {
     }
 
     try {
-        // Create transaction to reserve username
-        await database.ref(`usernames/${username.toLowerCase()}`).transaction((current) => {
-            if (current === null) return currentUser.id;
-            throw new Error('Username taken');
-        });
+        // Check availability again right before saving
+        const snapshot = await usernamesRef.child(username.toLowerCase()).once('value');
+        if (snapshot.exists()) {
+            throw new Error('Username already taken');
+        }
 
-        // Update user profile
-        await database.ref(`users/${currentUser.id}`).update({
-            username: username,
-            usernameLower: username.toLowerCase(),
-            isOnline: true,
-            lastActive: firebase.database.ServerValue.TIMESTAMP
-        });
+        // Atomic updates
+        const updates = {};
+        updates[`usernames/${username.toLowerCase()}`] = currentUser.id;
+        updates[`users/${currentUser.id}/username`] = username;
+        updates[`users/${currentUser.id}/usernameLower`] = username.toLowerCase();
+        updates[`users/${currentUser.id}/isOnline`] = true;
+
+        await database.ref().update(updates);
 
         currentUser.username = username;
+        currentUser.isAuthenticated = true;
         hideUsernameModal();
         loadMessages();
         setupPresence();
     } catch (error) {
         console.error("Username save error:", error);
-        // Cleanup failed reservation
-        await database.ref(`usernames/${username.toLowerCase()}`).remove();
-        alert(error.message || "Error saving username. Please try a different username.");
+        elements.usernameAvailability.textContent = 'Error saving username';
+        elements.usernameAvailability.className = 'username-taken';
+        alert(error.message.includes('taken') 
+            ? 'Username already taken. Please choose another.' 
+            : 'Error saving username. Please try again.');
     }
 }
 
@@ -279,9 +401,10 @@ function sendMessage() {
     const messageText = elements.messageInput.value.trim();
     if (!messageText || !currentUser.id) return;
 
+    const sanitizedText = escapeHtml(messageText).substring(0, 1000);
     const timestamp = Date.now();
     const messageData = {
-        text: messageText,
+        text: sanitizedText,
         senderId: currentUser.id,
         senderName: currentUser.username,
         timestamp: timestamp,
@@ -307,6 +430,7 @@ function sendMessage() {
         })
         .catch(error => {
             console.error("Error sending message:", error);
+            alert('Failed to send message. Please try again.');
         });
 }
 
@@ -372,6 +496,14 @@ function loadMessages() {
     messagesRef.orderByChild('timestamp').on('child_added', (snapshot) => {
         const message = snapshot.val();
         const isExpired = isMessageExpired(message);
+        
+        // Show notification for new messages from others
+        if (message.senderId !== currentUser.id && 
+            message.timestamp > lastMessageTimestamp) {
+            lastMessageTimestamp = message.timestamp;
+            showNotification(message);
+        }
+        
         displayMessage(message, snapshot.key, isExpired);
         
         if (!expiryTimer && !isExpired) {
@@ -410,11 +542,15 @@ function displayMessage(message, messageId, isExpired = false) {
     if (message.deleted || isExpired) return;
     
     const messageElement = document.createElement('div');
-    let messageContent = '';
+    messageElement.className = `message ${message.senderId === currentUser.id ? 'sent' : 'received'}`;
+    messageElement.dataset.messageId = messageId;
     
     const timeString = new Date(message.timestamp).toLocaleTimeString([], 
         { hour: '2-digit', minute: '2-digit' });
 
+    let messageContent = '';
+    
+    // Handle replies
     if (message.replyTo) {
         messagesRef.child(message.replyTo).once('value', (snapshot) => {
             const originalMessage = snapshot.val();
@@ -439,8 +575,8 @@ function displayMessage(message, messageId, isExpired = false) {
         });
     }
 
+    // Build message content based on type
     if (message.type === 'voice') {
-        messageElement.className = `message ${message.senderId === currentUser.id ? 'sent' : 'received'}`;
         messageContent = `
             <div class="message-header">
                 <span class="message-username">${message.senderName}</span>
@@ -452,7 +588,6 @@ function displayMessage(message, messageId, isExpired = false) {
         `;
     } 
     else if (message.type === 'image') {
-        messageElement.className = `message ${message.senderId === currentUser.id ? 'sent' : 'received'}`;
         messageContent = `
             <div class="message-header">
                 <span class="message-username">${message.senderName}</span>
@@ -462,7 +597,6 @@ function displayMessage(message, messageId, isExpired = false) {
         `;
     }
     else if (message.senderId) {
-        messageElement.className = `message ${message.senderId === currentUser.id ? 'sent' : 'received'}`;
         messageContent = `
             <div class="message-header">
                 <span class="message-username">${message.senderName}</span>
@@ -473,7 +607,9 @@ function displayMessage(message, messageId, isExpired = false) {
         
         if (message.senderId === currentUser.id && message.status) {
             messageContent += `
-                <span class="message-status ${message.status}" title="${message.status === 'delivered' ? 'Delivered' : 'Read'}"></span>
+                <span class="message-status ${message.status}">
+                    <i class="fas fa-check${message.status === 'read' ? '-double' : ''}"></i>
+                </span>
             `;
         }
     } 
@@ -482,6 +618,7 @@ function displayMessage(message, messageId, isExpired = false) {
         messageContent = message.text;
     }
 
+    // Add message actions if not expired
     if (!isExpired && message.senderId && message.type !== 'system') {
         const actionsDiv = document.createElement('div');
         actionsDiv.className = 'message-actions';
@@ -513,6 +650,7 @@ function displayMessage(message, messageId, isExpired = false) {
     messageElement.innerHTML += messageContent;
     elements.messagesContainer.appendChild(messageElement);
     
+    // Mark as read if received
     if (message.senderId !== currentUser.id && !message.read) {
         messagesRef.child(messageId).update({ read: true });
     }
@@ -525,15 +663,47 @@ function deleteMessage(messageId) {
     }
 }
 
+// Improved reply system
 function setupReply(messageId, messageText, senderName) {
+    // Cancel any existing reply
+    if (replyingTo) {
+        const previousMessage = document.querySelector(`[data-message-id="${replyingTo}"]`);
+        if (previousMessage) {
+            previousMessage.classList.remove('replying-to');
+        }
+    }
+
     replyingTo = messageId;
     elements.replyPreview.style.display = 'block';
-    elements.replyPreview.querySelector('.reply-preview-text').textContent = 
-        `Replying to ${senderName}: ${messageText.substring(0, 50)}${messageText.length > 50 ? '...' : ''}`;
+    
+    // Truncate long messages for preview
+    const truncatedText = messageText.length > 50 
+        ? messageText.substring(0, 50) + '...' 
+        : messageText;
+    
+    elements.replyPreview.querySelector('.reply-preview-text').innerHTML = `
+        Replying to <strong>${senderName}</strong>: ${escapeHtml(truncatedText)}
+    `;
+    
+    // Highlight the original message
+    const originalMessage = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (originalMessage) {
+        originalMessage.classList.add('replying-to');
+        setTimeout(() => {
+            originalMessage.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 100);
+    }
+    
     elements.messageInput.focus();
 }
 
 function cancelReply() {
+    if (replyingTo) {
+        const originalMessage = document.querySelector(`[data-message-id="${replyingTo}"]`);
+        if (originalMessage) {
+            originalMessage.classList.remove('replying-to');
+        }
+    }
     elements.replyPreview.style.display = 'none';
     replyingTo = null;
 }
@@ -695,19 +865,6 @@ function escapeHtml(unsafe) {
         .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}]/gu, match => match);
 }
 
-function getAuthErrorMessage(errorCode) {
-    switch(errorCode) {
-        case 'auth/invalid-email': return 'Invalid email address';
-        case 'auth/user-disabled': return 'Account disabled';
-        case 'auth/user-not-found': return 'Account not found';
-        case 'auth/wrong-password': return 'Incorrect password';
-        case 'auth/email-already-in-use': return 'Email already in use';
-        case 'auth/weak-password': return 'Password too weak';
-        case 'auth/operation-not-allowed': return 'Email/password accounts not enabled';
-        default: return 'Authentication error';
-    }
-}
-
 // UI Helpers
 function setupEventListeners() {
     elements.darkModeToggle.addEventListener('click', toggleDarkMode);
@@ -826,6 +983,8 @@ function hideUsernameModal() {
 
 // Auth State Handler
 async function handleAuthStateChange(user) {
+    console.log("Auth state changed:", user);
+    
     if (user) {
         currentUser.id = user.uid;
         
@@ -836,12 +995,14 @@ async function handleAuthStateChange(user) {
             if (!userData) {
                 await auth.signOut();
                 showAuthModal();
+                alert("Account not properly set up. Please register again.");
                 return;
             }
             
             if (userData.username) {
                 currentUser.name = userData.username;
                 currentUser.username = userData.username;
+                currentUser.isAuthenticated = true;
                 hideAuthModals();
                 loadMessages();
                 setupPresence();
@@ -850,12 +1011,18 @@ async function handleAuthStateChange(user) {
                 showUsernameModal();
             }
         } catch (error) {
-            console.error("Error checking user data:", error);
+            console.error("User data error:", error);
             await auth.signOut();
             showAuthModal();
+            alert("Error loading user data. Please try again.");
         }
     } else {
-        currentUser = { id: null, name: null, username: null };
+        currentUser = { 
+            id: null, 
+            name: null, 
+            username: null,
+            isAuthenticated: false 
+        };
         showAuthModal();
     }
 }
