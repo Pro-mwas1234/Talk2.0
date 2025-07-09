@@ -4,7 +4,7 @@ const firebaseConfig = {
   authDomain: "chat-d7eb8.firebaseapp.com",
   databaseURL: "https://chat-d7eb8-default-rtdb.firebaseio.com",
   projectId: "chat-d7eb8",
-  storageBucket: "chat-d7eb8.firebasestorage.app",
+  storageBucket: "chat-d7eb8.appspot.com",
   messagingSenderId: "963082833966",
   appId: "1:963082833966:web:2e66cff175cb6ae8a64fbf"
 };
@@ -207,32 +207,28 @@ async function saveUsername() {
     }
 
     try {
-        // Check username availability again (in case of race condition)
-        const snapshot = await usernamesRef.child(username.toLowerCase()).once('value');
-        if (snapshot.exists()) {
-            throw new Error('Username already taken');
-        }
+        // Create transaction to reserve username
+        await database.ref(`usernames/${username.toLowerCase()}`).transaction((current) => {
+            if (current === null) return currentUser.id;
+            throw new Error('Username taken');
+        });
 
-        // Create atomic updates
-        const updates = {};
-        updates[`users/${currentUser.id}/username`] = username;
-        updates[`users/${currentUser.id}/usernameLower`] = username.toLowerCase();
-        updates[`users/${currentUser.id}/isOnline`] = true;
-        updates[`usernames/${username.toLowerCase()}`] = currentUser.id;
+        // Update user profile
+        await database.ref(`users/${currentUser.id}`).update({
+            username: username,
+            usernameLower: username.toLowerCase(),
+            isOnline: true,
+            lastActive: firebase.database.ServerValue.TIMESTAMP
+        });
 
-        // Execute all updates
-        await database.ref().update(updates);
-
-        // Update local state
         currentUser.username = username;
-        currentUser.name = username;
-        
-        // Initialize chat
         hideUsernameModal();
         loadMessages();
         setupPresence();
     } catch (error) {
         console.error("Username save error:", error);
+        // Cleanup failed reservation
+        await database.ref(`usernames/${username.toLowerCase()}`).remove();
         alert(error.message || "Error saving username. Please try a different username.");
     }
 }
@@ -449,7 +445,9 @@ function displayMessage(message, messageId, isExpired = false) {
             <div class="message-header">
                 <span class="message-username">${message.senderName}</span>
             </div>
-            <audio controls src="${message.audioData}"></audio>
+            <div class="voice-message">
+                <audio controls src="${message.audioData}"></audio>
+            </div>
             <span class="timestamp">${timeString}</span>
         `;
     } 
