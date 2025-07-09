@@ -1,14 +1,13 @@
 // Firebase Configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyDrltFCORxJ5HpGMlho7FWj1Pk1G0BjLso",
-  authDomain: "nini-1bbf7.firebaseapp.com",
-  projectId: "nini-1bbf7",
-  storageBucket: "nini-1bbf7.firebasestorage.app",
-  messagingSenderId: "330113060420",
-  appId: "1:330113060420:web:7eca36a70c81c63237b611",
-  measurementId: "G-ZMCHFDQGDV"
+  apiKey: "AIzaSyDQ3-lEUPs00pULoClMun1gQyiFxUBajW4",
+  authDomain: "chat-d7eb8.firebaseapp.com",
+  databaseURL: "https://chat-d7eb8-default-rtdb.firebaseio.com",
+  projectId: "chat-d7eb8",
+  storageBucket: "chat-d7eb8.firebasestorage.app",
+  messagingSenderId: "963082833966",
+  appId: "1:963082833966:web:2e66cff175cb6ae8a64fbf"
 };
-
 
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
@@ -127,8 +126,7 @@ async function handleLogin() {
     }
 
     try {
-        const userCredential = await auth.signInWithEmailAndPassword(email, password);
-        console.log("User logged in:", userCredential.user);
+        await auth.signInWithEmailAndPassword(email, password);
     } catch (error) {
         console.error("Login error:", error);
         alert(getAuthErrorMessage(error.code));
@@ -151,125 +149,21 @@ async function handleRegister() {
     }
 
     try {
-        // 1. Create auth account
         const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-        
-        // 2. Store basic user info without username first
         await usersRef.child(userCredential.user.uid).set({
             displayName: name,
             email: email,
-            isOnline: false, // Not fully registered yet
+            isOnline: false,
             joinedAt: firebase.database.ServerValue.TIMESTAMP
         });
 
-        // 3. Hide auth modal and show username modal
         hideAuthModals();
         showUsernameModal();
-        
-        // 4. Set current user (without username yet)
-        currentUser = {
-            id: userCredential.user.uid,
-            name: name,
-            username: null
-        };
-
+        currentUser.id = userCredential.user.uid;
+        currentUser.name = name;
     } catch (error) {
         console.error("Registration error:", error);
         alert(getAuthErrorMessage(error.code));
-    }
-}
-
-async function saveUsername() {
-    const username = elements.usernameInput.value.trim();
-    
-    if (username.length < 3 || username.length > 15) {
-        alert('Username must be 3-15 characters');
-        return;
-    }
-
-    try {
-        // Check if username exists (case insensitive)
-        const snapshot = await usersRef.orderByChild('usernameLower').equalTo(username.toLowerCase()).once('value');
-        
-        if (snapshot.exists()) {
-            alert('Username is already taken');
-            return;
-        }
-
-        // Update user with username
-        await usersRef.child(currentUser.id).update({
-            username: username,
-            usernameLower: username.toLowerCase(),
-            isOnline: true // Now fully registered
-        });
-
-        // Add to usernames collection for uniqueness check
-        await usernamesRef.child(username.toLowerCase()).set(currentUser.id);
-
-        // Update current user
-        currentUser.username = username;
-        currentUser.name = username;
-        
-        // Hide modals and initialize chat
-        hideUsernameModal();
-        loadMessages();
-        setupPresence();
-        
-    } catch (error) {
-        console.error("Error saving username:", error);
-        alert("Error saving username. Please try again.");
-    }
-}
-
-async function handleAuthStateChange(user) {
-    if (user) {
-        currentUser.id = user.uid;
-        
-        try {
-            const snapshot = await usersRef.child(user.uid).once('value');
-            const userData = snapshot.val();
-            
-            if (!userData) {
-                // User auth exists but no database record
-                await auth.signOut();
-                showAuthModal();
-                return;
-            }
-            
-            if (userData.username) {
-                // Fully registered user
-                currentUser.name = userData.username;
-                currentUser.username = userData.username;
-                hideAuthModals();
-                loadMessages();
-                setupPresence();
-            } else {
-                // Needs to set username
-                hideAuthModals();
-                showUsernameModal();
-            }
-        } catch (error) {
-            console.error("Error checking user data:", error);
-            await auth.signOut();
-            showAuthModal();
-        }
-    } else {
-        // No user signed in
-        currentUser = { id: null, name: null, username: null };
-        showAuthModal();
-    }
-}
-
-function getAuthErrorMessage(errorCode) {
-    switch(errorCode) {
-        case 'auth/invalid-email': return 'Invalid email address';
-        case 'auth/user-disabled': return 'Account disabled';
-        case 'auth/user-not-found': return 'Account not found';
-        case 'auth/wrong-password': return 'Incorrect password';
-        case 'auth/email-already-in-use': return 'Email already in use';
-        case 'auth/weak-password': return 'Password too weak';
-        case 'auth/operation-not-allowed': return 'Email/password accounts not enabled';
-        default: return 'Authentication error';
     }
 }
 
@@ -279,25 +173,68 @@ function setupUsernameSelection() {
     elements.submitUsernameBtn.addEventListener('click', saveUsername);
 }
 
-function checkUsernameAvailability() {
+async function checkUsernameAvailability() {
     const username = elements.usernameInput.value.trim();
     
-    if (username.length < 3 || username.length > 15) {
-        elements.usernameAvailability.textContent = 'Username must be 3-15 characters';
+    if (!username.match(/^[a-zA-Z0-9_]{3,15}$/)) {
+        elements.usernameAvailability.textContent = '3-15 alphanumeric characters';
         elements.usernameAvailability.className = 'username-taken';
         return;
     }
 
-    usersRef.orderByChild('usernameLower').equalTo(username.toLowerCase()).once('value')
-        .then(snapshot => {
-            if (snapshot.exists()) {
-                elements.usernameAvailability.textContent = 'Username already taken';
-                elements.usernameAvailability.className = 'username-taken';
-            } else {
-                elements.usernameAvailability.textContent = 'Username available';
-                elements.usernameAvailability.className = 'username-available';
-            }
-        });
+    try {
+        const snapshot = await usernamesRef.child(username.toLowerCase()).once('value');
+        if (snapshot.exists()) {
+            elements.usernameAvailability.textContent = 'Username taken';
+            elements.usernameAvailability.className = 'username-taken';
+        } else {
+            elements.usernameAvailability.textContent = 'Username available';
+            elements.usernameAvailability.className = 'username-available';
+        }
+    } catch (error) {
+        console.error("Error checking username:", error);
+        elements.usernameAvailability.textContent = 'Error checking';
+        elements.usernameAvailability.className = 'username-taken';
+    }
+}
+
+async function saveUsername() {
+    const username = elements.usernameInput.value.trim();
+    
+    if (!username.match(/^[a-zA-Z0-9_]{3,15}$/)) {
+        alert('Username must be 3-15 alphanumeric characters');
+        return;
+    }
+
+    try {
+        // Check username availability again (in case of race condition)
+        const snapshot = await usernamesRef.child(username.toLowerCase()).once('value');
+        if (snapshot.exists()) {
+            throw new Error('Username already taken');
+        }
+
+        // Create atomic updates
+        const updates = {};
+        updates[`users/${currentUser.id}/username`] = username;
+        updates[`users/${currentUser.id}/usernameLower`] = username.toLowerCase();
+        updates[`users/${currentUser.id}/isOnline`] = true;
+        updates[`usernames/${username.toLowerCase()}`] = currentUser.id;
+
+        // Execute all updates
+        await database.ref().update(updates);
+
+        // Update local state
+        currentUser.username = username;
+        currentUser.name = username;
+        
+        // Initialize chat
+        hideUsernameModal();
+        loadMessages();
+        setupPresence();
+    } catch (error) {
+        console.error("Username save error:", error);
+        alert(error.message || "Error saving username. Please try a different username.");
+    }
 }
 
 // User Presence
@@ -350,7 +287,7 @@ function sendMessage() {
     const messageData = {
         text: messageText,
         senderId: currentUser.id,
-        senderName: currentUser.username || currentUser.name,
+        senderName: currentUser.username,
         timestamp: timestamp,
         type: 'text',
         status: 'sent'
@@ -392,7 +329,7 @@ function handleFileUpload(e) {
         const messageData = {
             imageUrl: event.target.result,
             senderId: currentUser.id,
-            senderName: currentUser.username || currentUser.name,
+            senderName: currentUser.username,
             timestamp: timestamp,
             type: 'image'
         };
@@ -421,7 +358,7 @@ function updateTyping(typing) {
     
     if (typing !== isTyping) {
         isTyping = typing;
-        typingRef.child(currentUser.id).set(isTyping ? currentUser.username || currentUser.name : null);
+        typingRef.child(currentUser.id).set(isTyping ? currentUser.username : null);
     }
     
     clearTimeout(lastTypingTime);
@@ -645,7 +582,7 @@ function processRecording() {
             audioData: reader.result,
             duration: Math.round(audioBlob.size / 1000),
             senderId: currentUser.id,
-            senderName: currentUser.username || currentUser.name,
+            senderName: currentUser.username,
             timestamp: timestamp
         };
         
@@ -758,6 +695,19 @@ function escapeHtml(unsafe) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;")
         .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}]/gu, match => match);
+}
+
+function getAuthErrorMessage(errorCode) {
+    switch(errorCode) {
+        case 'auth/invalid-email': return 'Invalid email address';
+        case 'auth/user-disabled': return 'Account disabled';
+        case 'auth/user-not-found': return 'Account not found';
+        case 'auth/wrong-password': return 'Incorrect password';
+        case 'auth/email-already-in-use': return 'Email already in use';
+        case 'auth/weak-password': return 'Password too weak';
+        case 'auth/operation-not-allowed': return 'Email/password accounts not enabled';
+        default: return 'Authentication error';
+    }
 }
 
 // UI Helpers
@@ -874,6 +824,42 @@ function showUsernameModal() {
 
 function hideUsernameModal() {
     elements.usernameModal.classList.remove('show');
+}
+
+// Auth State Handler
+async function handleAuthStateChange(user) {
+    if (user) {
+        currentUser.id = user.uid;
+        
+        try {
+            const snapshot = await usersRef.child(user.uid).once('value');
+            const userData = snapshot.val();
+            
+            if (!userData) {
+                await auth.signOut();
+                showAuthModal();
+                return;
+            }
+            
+            if (userData.username) {
+                currentUser.name = userData.username;
+                currentUser.username = userData.username;
+                hideAuthModals();
+                loadMessages();
+                setupPresence();
+            } else {
+                hideAuthModals();
+                showUsernameModal();
+            }
+        } catch (error) {
+            console.error("Error checking user data:", error);
+            await auth.signOut();
+            showAuthModal();
+        }
+    } else {
+        currentUser = { id: null, name: null, username: null };
+        showAuthModal();
+    }
 }
 
 // Cleanup on exit
