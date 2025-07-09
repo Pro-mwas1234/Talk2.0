@@ -2,6 +2,7 @@
 const firebaseConfig = {
   apiKey: "AIzaSyDrltFCORxJ5HpGMlho7FWj1Pk1G0BjLso",
   authDomain: "nini-1bbf7.firebaseapp.com",
+  databaseURL: "https://nini-1bbf7-default-rtdb.firebaseio.com",
   projectId: "nini-1bbf7",
   storageBucket: "nini-1bbf7.firebasestorage.app",
   messagingSenderId: "330113060420",
@@ -111,7 +112,6 @@ function showNotification(message) {
         };
     }
     
-    // Update badge count
     if (!document.hasFocus()) {
         unreadCount++;
         elements.notificationBadge.textContent = unreadCount;
@@ -141,8 +141,8 @@ function init() {
         console.warn("Voice recording not supported in this browser");
     }
     
-    // Reset badge when window gets focus
     window.addEventListener('focus', resetUnreadCount);
+    document.addEventListener('touchstart', handleTouchStart, {passive: true});
 }
 
 // Authentication Functions
@@ -325,13 +325,11 @@ async function saveUsername() {
     }
 
     try {
-        // Check availability again right before saving
         const snapshot = await usernamesRef.child(username.toLowerCase()).once('value');
         if (snapshot.exists()) {
             throw new Error('Username already taken');
         }
 
-        // Atomic updates
         const updates = {};
         updates[`usernames/${username.toLowerCase()}`] = currentUser.id;
         updates[`users/${currentUser.id}/username`] = username;
@@ -497,7 +495,6 @@ function loadMessages() {
         const message = snapshot.val();
         const isExpired = isMessageExpired(message);
         
-        // Show notification for new messages from others
         if (message.senderId !== currentUser.id && 
             message.timestamp > lastMessageTimestamp) {
             lastMessageTimestamp = message.timestamp;
@@ -550,7 +547,6 @@ function displayMessage(message, messageId, isExpired = false) {
 
     let messageContent = '';
     
-    // Handle replies
     if (message.replyTo) {
         messagesRef.child(message.replyTo).once('value', (snapshot) => {
             const originalMessage = snapshot.val();
@@ -575,7 +571,6 @@ function displayMessage(message, messageId, isExpired = false) {
         });
     }
 
-    // Build message content based on type
     if (message.type === 'voice') {
         messageContent = `
             <div class="message-header">
@@ -608,7 +603,7 @@ function displayMessage(message, messageId, isExpired = false) {
         if (message.senderId === currentUser.id && message.status) {
             messageContent += `
                 <span class="message-status ${message.status}">
-                    <i class="fas fa-check${message.status === 'read' ? '-double' : ''}"></i>
+                  <i class="fas fa-check${message.status === 'read' ? '-double' : ''}"></i>
                 </span>
             `;
         }
@@ -618,7 +613,6 @@ function displayMessage(message, messageId, isExpired = false) {
         messageContent = message.text;
     }
 
-    // Add message actions if not expired
     if (!isExpired && message.senderId && message.type !== 'system') {
         const actionsDiv = document.createElement('div');
         actionsDiv.className = 'message-actions';
@@ -628,7 +622,9 @@ function displayMessage(message, messageId, isExpired = false) {
             replyBtn.className = 'reply-btn';
             replyBtn.innerHTML = '<i class="fas fa-reply"></i>';
             replyBtn.title = 'Reply to this message';
-            replyBtn.addEventListener('click', () => {
+            replyBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
                 setupReply(messageId, message.text || '[Media]', message.senderName);
             });
             actionsDiv.appendChild(replyBtn);
@@ -639,8 +635,11 @@ function displayMessage(message, messageId, isExpired = false) {
             deleteBtn.className = 'delete-btn';
             deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
             deleteBtn.title = 'Delete message';
-            deleteBtn.dataset.messageId = messageId;
-            deleteBtn.addEventListener('click', () => deleteMessage(messageId));
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                deleteMessage(messageId);
+            });
             actionsDiv.appendChild(deleteBtn);
         }
         
@@ -650,7 +649,6 @@ function displayMessage(message, messageId, isExpired = false) {
     messageElement.innerHTML += messageContent;
     elements.messagesContainer.appendChild(messageElement);
     
-    // Mark as read if received
     if (message.senderId !== currentUser.id && !message.read) {
         messagesRef.child(messageId).update({ read: true });
     }
@@ -663,29 +661,18 @@ function deleteMessage(messageId) {
     }
 }
 
-// Improved reply system
 function setupReply(messageId, messageText, senderName) {
-    // Cancel any existing reply
     if (replyingTo) {
         const previousMessage = document.querySelector(`[data-message-id="${replyingTo}"]`);
-        if (previousMessage) {
-            previousMessage.classList.remove('replying-to');
-        }
+        if (previousMessage) previousMessage.classList.remove('replying-to');
     }
 
     replyingTo = messageId;
     elements.replyPreview.style.display = 'block';
-    
-    // Truncate long messages for preview
-    const truncatedText = messageText.length > 50 
-        ? messageText.substring(0, 50) + '...' 
-        : messageText;
-    
     elements.replyPreview.querySelector('.reply-preview-text').innerHTML = `
-        Replying to <strong>${senderName}</strong>: ${escapeHtml(truncatedText)}
+        Replying to <strong>${senderName}</strong>: ${escapeHtml(messageText.substring(0, 50))}${messageText.length > 50 ? '...' : ''}
     `;
-    
-    // Highlight the original message
+
     const originalMessage = document.querySelector(`[data-message-id="${messageId}"]`);
     if (originalMessage) {
         originalMessage.classList.add('replying-to');
@@ -936,6 +923,21 @@ function setupMobileFeatures() {
             e.preventDefault();
             toggleOnlineUsersPanel();
         });
+    }
+}
+
+function handleTouchStart(e) {
+    if (e.target.closest('.message')) {
+        const message = e.target.closest('.message');
+        const actions = message.querySelector('.message-actions');
+        if (actions) {
+            actions.style.opacity = '1';
+            setTimeout(() => {
+                if (!message.matches(':hover') && !message.matches(':focus-within')) {
+                    actions.style.opacity = '0.7';
+                }
+            }, 3000);
+        }
     }
 }
 
