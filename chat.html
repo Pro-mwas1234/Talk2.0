@@ -6,6 +6,7 @@
     <title>🌹Chat 🕸 Hub💮</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="icon" href="https://img.icons8.com/ios-filled/100/hub.png">
     <link rel="stylesheet" href="chat.css">
     <meta name="theme-color" content="#075E54">
 </head>
@@ -15,10 +16,6 @@
         <!-- Header -->
         <header class="app-header">
             <div class="header-left">
-                <div class="profile-container">
-                    <img id="currentUserAvatar" src="images/default-avatar.png" class="avatar" title="Change photo">
-                    <input type="file" id="avatarUpload" accept="image/*" style="display:none;">
-                </div>
                 <button id="onlineUsersToggle" class="icon-button" title="Show online users">
                     <i class="fas fa-users"></i>
                 </button>
@@ -113,6 +110,12 @@
 
     <!-- Emoji Picker -->
     <emoji-picker id="emojiPicker"></emoji-picker>
+
+    <!-- Undo Toast -->
+    <div id="undoToast" class="undo-toast" style="display:none;">
+        Message deleted
+        <button id="undoDelete" class="undo-btn">Undo</button>
+    </div>
 
     <!-- Firebase and other scripts -->
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
