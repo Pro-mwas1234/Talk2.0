@@ -217,20 +217,16 @@ body {
 .message-actions {
     position: absolute;
     top: 5px;
-    display: none;
-    gap: 5px;
-}
-
-.message.sent .message-actions {
-    left: -35px;
-}
-
-.message.received .message-actions {
-    right: -35px;
-}
-
-.message:hover .message-actions {
     display: flex;
+    gap: 5px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 10;
+}
+
+.message:hover .message-actions,
+.message.active .message-actions {
+    opacity: 1;
 }
 
 .reply-btn, .delete-btn {
@@ -246,8 +242,19 @@ body {
     color: inherit;
 }
 
-.reply-btn:hover, .delete-btn:hover {
+.reply-btn:hover {
     background: rgba(0,0,0,0.2);
+}
+
+.delete-btn {
+    color: var(--error-color);
+    transition: all 0.2s ease;
+}
+
+.delete-btn:hover {
+    background: var(--error-color);
+    color: white;
+    transform: scale(1.1);
 }
 
 /* Reply Preview */
@@ -406,6 +413,9 @@ body {
     width: 200px;
     z-index: 100;
     display: none;
+    min-height: 100px;
+    max-height: 300px;
+    overflow-y: auto;
 }
 
 .online-users-panel.show {
@@ -424,6 +434,13 @@ body {
     border-bottom: 1px solid rgba(0,0,0,0.1);
 }
 
+.no-users {
+    color: var(--timestamp-color);
+    font-size: 0.9em;
+    text-align: center;
+    padding: 10px;
+}
+
 .status-indicator {
     display: inline-block;
     width: 10px;
@@ -431,6 +448,12 @@ body {
     border-radius: 50%;
     background-color: var(--primary-light);
     margin-right: 8px;
+}
+
+.typing-badge {
+    font-size: 0.8em;
+    color: var(--primary-color);
+    margin-left: 5px;
 }
 
 .user-name {
@@ -605,6 +628,51 @@ emoji-picker.active {
     transition: height 0.3s ease;
 }
 
+/* Undo Toast */
+.undo-toast {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--primary-dark);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 25px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.undo-btn {
+    background: none;
+    border: 1px solid white;
+    color: white;
+    padding: 3px 10px;
+    border-radius: 15px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.undo-btn:hover {
+    background: white;
+    color: var(--primary-dark);
+}
+
+/* Deletion States */
+.message.deleting {
+    opacity: 0.5;
+    transition: opacity 0.3s ease;
+}
+
+.message.error {
+    animation: shake 0.5s ease;
+    border-left: 3px solid var(--error-color);
+}
+
 /* Animations */
 @keyframes messageIn {
     from {
@@ -623,6 +691,12 @@ emoji-picker.active {
     100% { transform: scale(0.95); opacity: 0.7; }
 }
 
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-3px); }
+    40%, 80% { transform: translateX(3px); }
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
     width: 6px;
@@ -631,6 +705,10 @@ emoji-picker.active {
 ::-webkit-scrollbar-thumb {
     background-color: var(--primary-color);
     border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in srgb, var(--primary-color) 70%, transparent);
 }
 
 /* Responsive Adjustments */
@@ -649,6 +727,7 @@ emoji-picker.active {
         position: static;
         display: flex;
         margin-top: 5px;
+        opacity: 1;
     }
     
     .message.sent .message-actions,
