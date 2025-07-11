@@ -50,7 +50,9 @@ const elements = {
     stopRecording: document.getElementById('stopRecording'),
     recordingStatus: document.getElementById('recordingStatus'),
     chatTitle: document.getElementById('chatTitle'),
-    notificationBadge: document.getElementById('notification-badge')
+    notificationBadge: document.getElementById('notification-badge'),
+    undoToast: document.getElementById('undoToast'),
+    undoDelete: document.getElementById('undoDelete')
 };
 
 // App State
@@ -75,6 +77,9 @@ const AUTH_TIMEOUT = 30000;
 let lastMessageTimestamp = 0;
 let notificationPermission = false;
 let unreadCount = 0;
+let lastDeletedMessage = null;
+let undoTimeout = null;
+const UNDO_TIMEOUT = 5000;
 const notificationSound = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-alarm-digital-clock-beep-989.mp3');
 
 // Firebase References
@@ -357,30 +362,43 @@ async function saveUsername() {
 
 // User Presence
 function setupPresence() {
-    usersRef.child(currentUser.id).update({
+    if (!currentUser.id) return;
+
+    // Set initial online status
+    const userStatusRef = usersRef.child(currentUser.id);
+    
+    // Update status to online
+    userStatusRef.update({
         isOnline: true,
         lastActive: firebase.database.ServerValue.TIMESTAMP
     });
 
-    usersRef.child(currentUser.id).onDisconnect().update({
+    // Setup onDisconnect handler
+    userStatusRef.onDisconnect().update({
         isOnline: false,
         lastActive: firebase.database.ServerValue.TIMESTAMP
     });
 
-    setInterval(() => {
+    // Update lastActive periodically
+    const presenceInterval = setInterval(() => {
         if (currentUser.id) {
-            usersRef.child(currentUser.id).update({
+            userStatusRef.update({
                 lastActive: firebase.database.ServerValue.TIMESTAMP
             });
+        } else {
+            clearInterval(presenceInterval);
         }
     }, 30000);
 
+    // Listen for online users
     usersRef.orderByChild('isOnline').equalTo(true).on('value', (snapshot) => {
         onlineUsers = {};
         elements.onlineUsersList.innerHTML = '';
         
         snapshot.forEach((childSnapshot) => {
             const user = childSnapshot.val();
+            if (!user) return;
+            
             onlineUsers[childSnapshot.key] = user;
             
             if (childSnapshot.key !== currentUser.id) {
@@ -389,10 +407,16 @@ function setupPresence() {
                 userElement.innerHTML = `
                     <span class="status-indicator"></span>
                     <span class="user-name">${user.username || user.displayName || 'Anonymous'}</span>
+                    ${user.isTyping ? '<span class="typing-badge">typing...</span>' : ''}
                 `;
                 elements.onlineUsersList.appendChild(userElement);
             }
         });
+        
+        // Show/hide panel if empty
+        if (elements.onlineUsersList.children.length === 0) {
+            elements.onlineUsersList.innerHTML = '<div class="no-users">No other users online</div>';
+        }
     });
 }
 
@@ -528,7 +552,12 @@ function loadMessages() {
             activeTypers.forEach(([userId, userName]) => {
                 const typingElement = document.createElement('div');
                 typingElement.className = 'typing-user';
-                typingElement.textContent = userName;
+                typingElement.innerHTML = `
+                    <span class="typing-dots">
+                        <span></span><span></span><span></span>
+                    </span>
+                    ${userName} is typing
+                `;
                 elements.typingUsers.appendChild(typingElement);
             });
             elements.typingIndicator.style.display = 'block';
@@ -657,10 +686,92 @@ function displayMessage(message, messageId, isExpired = false) {
 }
 
 // Message Management
-function deleteMessage(messageId) {
-    if (confirm('Are you sure you want to delete this message?')) {
-        messagesRef.child(messageId).update({ deleted: true });
+async function deleteMessage(messageId) {
+    if (!confirm('Are you sure you want to delete this message?')) return;
+    
+    const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (!messageElement) return;
+    
+    try {
+        // Store reference for undo
+        lastDeletedMessage = {
+            id: messageId,
+            element: messageElement.cloneNode(true),
+            data: await getMessageData(messageId)
+        };
+        
+        // UI feedback
+        messageElement.classList.add('deleting');
+        const deleteBtn = messageElement.querySelector('.delete-btn');
+        if (deleteBtn) deleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        
+        // Mark as deleted in Firebase
+        await messagesRef.child(messageId).update({ 
+            deleted: true,
+            deletedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+        
+        // Show undo toast
+        showUndoToast();
+        
+        // Final removal after timeout
+        undoTimeout = setTimeout(() => {
+            messageElement.remove();
+            hideUndoToast();
+        }, UNDO_TIMEOUT);
+        
+    } catch (error) {
+        console.error("Delete failed:", error);
+        messageElement.classList.remove('deleting');
+        messageElement.classList.add('error');
+        setTimeout(() => messageElement.classList.remove('error'), 1000);
+        
+        const deleteBtn = messageElement.querySelector('.delete-btn');
+        if (deleteBtn) deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
     }
+}
+
+async function getMessageData(messageId) {
+    const snapshot = await messagesRef.child(messageId).once('value');
+    return snapshot.val();
+}
+
+function showUndoToast() {
+    const toast = elements.undoToast;
+    toast.style.display = 'flex';
+    setTimeout(() => toast.style.opacity = '1', 10);
+}
+
+function hideUndoToast() {
+    const toast = elements.undoToast;
+    toast.style.opacity = '0';
+    setTimeout(() => toast.style.display = 'none', 300);
+}
+
+async function undoDelete() {
+    if (!lastDeletedMessage) return;
+    
+    clearTimeout(undoTimeout);
+    hideUndoToast();
+    
+    try {
+        // Restore in Firebase
+        await messagesRef.child(lastDeletedMessage.id).update({
+            deleted: false,
+            deletedAt: null
+        });
+        
+        // Restore in UI if element was removed
+        if (!document.querySelector(`[data-message-id="${lastDeletedMessage.id}"]`)) {
+            elements.messagesContainer.appendChild(lastDeletedMessage.element);
+        }
+        
+    } catch (error) {
+        console.error("Undo failed:", error);
+        alert('Failed to undo deletion. Please try again.');
+    }
+    
+    lastDeletedMessage = null;
 }
 
 // Improved reply system
@@ -668,41 +779,48 @@ function setupReply(messageId, messageText, senderName) {
     // Cancel any existing reply
     if (replyingTo) {
         const previousMessage = document.querySelector(`[data-message-id="${replyingTo}"]`);
-        if (previousMessage) {
-            previousMessage.classList.remove('replying-to');
-        }
+        if (previousMessage) previousMessage.classList.remove('replying-to');
     }
 
     replyingTo = messageId;
-    elements.replyPreview.style.display = 'block';
+    elements.replyPreview.style.display = 'flex';
     
-    // Truncate long messages for preview
-    const truncatedText = messageText.length > 50 
-        ? messageText.substring(0, 50) + '...' 
-        : messageText;
-    
+    // Improved preview with click-to-scroll
     elements.replyPreview.querySelector('.reply-preview-text').innerHTML = `
-        Replying to <strong>${senderName}</strong>: ${escapeHtml(truncatedText)}
+        <span>Replying to <strong>${senderName}</strong>:</span>
+        <span class="reply-content">${escapeHtml(truncateText(messageText, 50))}</span>
     `;
     
-    // Highlight the original message
-    const originalMessage = document.querySelector(`[data-message-id="${messageId}"]`);
-    if (originalMessage) {
-        originalMessage.classList.add('replying-to');
+    // Make preview clickable
+    elements.replyPreview.querySelector('.reply-content').onclick = () => {
+        scrollToMessage(messageId);
+    };
+    
+    // Highlight original message
+    scrollToMessage(messageId, true);
+}
+
+function scrollToMessage(messageId, highlight = false) {
+    const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (!messageElement) return;
+    
+    if (highlight) {
+        messageElement.classList.add('replying-to');
         setTimeout(() => {
-            originalMessage.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }, 100);
+            messageElement.classList.remove('replying-to');
+        }, 2000);
     }
     
-    elements.messageInput.focus();
+    messageElement.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+    });
 }
 
 function cancelReply() {
     if (replyingTo) {
         const originalMessage = document.querySelector(`[data-message-id="${replyingTo}"]`);
-        if (originalMessage) {
-            originalMessage.classList.remove('replying-to');
-        }
+        if (originalMessage) originalMessage.classList.remove('replying-to');
     }
     elements.replyPreview.style.display = 'none';
     replyingTo = null;
@@ -807,6 +925,10 @@ function debounce(func, timeout = 300) {
     };
 }
 
+function truncateText(text, length) {
+    return text.length > length ? text.substring(0, length) + '...' : text;
+}
+
 function isMessageExpired(message) {
     if (!message.timestamp) return false;
     const messageAge = (Date.now() - message.timestamp) / (1000 * 60);
@@ -884,6 +1006,47 @@ function setupEventListeners() {
     elements.stopRecording.addEventListener('click', stopRecording);
     elements.cancelReply.addEventListener('click', cancelReply);
     elements.onlineUsersToggle.addEventListener('click', toggleOnlineUsersPanel);
+    elements.undoDelete.addEventListener('click', undoDelete);
+    
+    // Handle message clicks for desktop
+    elements.messagesContainer.addEventListener('click', (e) => {
+        const messageElement = e.target.closest('.message');
+        if (!messageElement) {
+            // Click outside any message - hide all actions
+            document.querySelectorAll('.message').forEach(msg => {
+                msg.classList.remove('active');
+            });
+            return;
+        }
+        
+        // Toggle active state for clicked message
+        document.querySelectorAll('.message').forEach(msg => {
+            msg.classList.remove('active');
+        });
+        messageElement.classList.add('active');
+    });
+    
+    // Handle reply and delete button clicks
+    elements.messagesContainer.addEventListener('click', (e) => {
+        const replyBtn = e.target.closest('.reply-btn');
+        const deleteBtn = e.target.closest('.delete-btn');
+        
+        if (replyBtn) {
+            e.stopPropagation();
+            const messageElement = replyBtn.closest('.message');
+            const messageId = messageElement.dataset.messageId;
+            const messageText = messageElement.querySelector('.message-text')?.textContent || '[Media]';
+            const senderName = messageElement.querySelector('.message-username')?.textContent || 'Unknown';
+            setupReply(messageId, messageText, senderName);
+        }
+        
+        if (deleteBtn) {
+            e.stopPropagation();
+            const messageId = deleteBtn.dataset.messageId;
+            deleteMessage(messageId);
+        }
+    });
+    
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && replyingTo) {
             cancelReply();
