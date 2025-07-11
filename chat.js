@@ -105,7 +105,7 @@ function showNotification(message) {
     if (!document.hasFocus() && notificationPermission) {
         const notification = new Notification('New Message', {
             body: `${message.senderName}: ${message.text || '[Media]'}`,
-            icon: 'https://cdn-icons-png.flaticon.com/512/733/733585.png'
+            icon: 'https://img.icons8.com/cotton/100/filled-chat--v1.png'
         });
         notificationSound.play();
         
