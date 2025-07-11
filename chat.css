@@ -32,7 +32,6 @@
     --success-color: #69f0ae;
 }
 
-/* Base Styles */
 * {
     box-sizing: border-box;
     margin: 0;
@@ -65,43 +64,6 @@ body {
     z-index: 1000;
 }
 
-/* Avatar Styles */
-.avatar {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    object-fit: cover;
-    cursor: pointer;
-    border: 2px solid var(--primary-color);
-    transition: transform 0.2s;
-}
-
-.avatar:hover {
-    transform: scale(1.05);
-}
-
-.message-avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    margin-right: 10px;
-    object-fit: cover;
-    align-self: flex-start;
-}
-
-.online-user-avatar {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    margin-right: 8px;
-    object-fit: cover;
-}
-
-.profile-container {
-    margin-right: 15px;
-    position: relative;
-}
-
 /* Header */
 .app-header {
     background-color: var(--primary-dark);
@@ -125,11 +87,7 @@ body {
     font-size: 1.2rem;
     font-weight: 500;
     flex: 1;
-    margin: 0 15px;
-    text-align: center;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    margin: 0 10px;
 }
 
 /* Chat Container */
@@ -161,44 +119,46 @@ body {
 /* Message Styles */
 .message {
     max-width: 75%;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
     padding: 8px 12px;
     border-radius: 18px;
     position: relative;
     word-wrap: break-word;
     box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.1);
     animation: messageIn 0.3s ease forwards;
-    display: flex;
-    align-items: flex-start;
     clear: both;
 }
 
-.message-content {
-    flex: 1;
-    overflow-wrap: break-word;
-}
-
-/* Sent/Received Messages */
+/* Sent messages (right side) */
 .message.sent {
-    align-self: flex-end;
+    float: right;
     background-color: var(--message-sent);
     border-bottom-right-radius: 0;
     margin-right: 5px;
-    flex-direction: row-reverse;
 }
 
+/* Received messages (left side) */
 .message.received {
-    align-self: flex-start;
+    float: left;
     background-color: var(--message-received);
     border-bottom-left-radius: 0;
     margin-left: 5px;
 }
 
+/* System messages */
 .message.system {
-    margin: 8px auto;
+    float: none;
+    margin-left: auto;
+    margin-right: auto;
     text-align: center;
+    clear: both;
     background-color: var(--system-message);
-    display: inline-block;
+}
+
+/* Clear floats */
+.messages-container::after {
+    content: "";
+    display: table;
     clear: both;
 }
 
@@ -206,7 +166,7 @@ body {
 .message-header {
     display: flex;
     align-items: baseline;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
 }
 
 .message-username {
@@ -219,19 +179,18 @@ body {
 .message-text {
     font-size: 14px;
     line-height: 1.4;
-    margin-bottom: 3px;
+    margin-bottom: 2px;
 }
 
 /* Timestamps */
 .timestamp {
     font-size: 11px;
     color: var(--timestamp-color);
-    display: inline-block;
-    margin-top: 2px;
+    display: block;
+    margin-top: 3px;
 }
 
 .message.sent .timestamp {
-    margin-left: 8px;
     text-align: right;
 }
 
@@ -241,8 +200,12 @@ body {
 
 /* Message Status */
 .message-status {
-    display: inline-block;
+    float: right;
     margin-left: 5px;
+    margin-top: 2px;
+}
+
+.message-status.delivered {
     color: var(--timestamp-color);
 }
 
@@ -254,7 +217,7 @@ body {
 .message-actions {
     position: absolute;
     top: 5px;
-    display: none;
+    display: flex;
     gap: 5px;
     opacity: 0;
     transition: opacity 0.2s ease;
@@ -263,16 +226,7 @@ body {
 
 .message:hover .message-actions,
 .message.active .message-actions {
-    display: flex;
     opacity: 1;
-}
-
-.message.sent .message-actions {
-    left: -40px;
-}
-
-.message.received .message-actions {
-    right: -40px;
 }
 
 .reply-btn, .delete-btn {
@@ -286,7 +240,6 @@ body {
     justify-content: center;
     cursor: pointer;
     color: inherit;
-    transition: background 0.2s;
 }
 
 .reply-btn:hover {
@@ -386,7 +339,6 @@ body {
     font-size: 14px;
     background-color: var(--message-received);
     color: var(--text-color);
-    transition: box-shadow 0.2s;
 }
 
 #messageInput:focus {
@@ -473,7 +425,6 @@ body {
 .online-users-panel h3 {
     margin-bottom: 10px;
     font-size: 16px;
-    color: var(--text-color);
 }
 
 .online-user {
@@ -490,11 +441,6 @@ body {
     padding: 10px;
 }
 
-.user-name {
-    font-size: 14px;
-    color: var(--text-color);
-}
-
 .status-indicator {
     display: inline-block;
     width: 10px;
@@ -508,6 +454,10 @@ body {
     font-size: 0.8em;
     color: var(--primary-color);
     margin-left: 5px;
+}
+
+.user-name {
+    font-size: 14px;
 }
 
 /* Typing Indicator */
@@ -727,11 +677,11 @@ emoji-picker.active {
 @keyframes messageIn {
     from {
         opacity: 0;
-        transform: translateY(10px);
+        transform: translateY(10px) scale(0.95);
     }
     to {
         opacity: 1;
-        transform: translateY(0);
+        transform: translateY(0) scale(1);
     }
 }
 
@@ -767,16 +717,6 @@ emoji-picker.active {
         height: 100vh;
         max-width: 100%;
         border-radius: 0;
-    }
-    
-    .avatar {
-        width: 36px;
-        height: 36px;
-    }
-    
-    .message-avatar {
-        width: 30px;
-        height: 30px;
     }
     
     .message {
