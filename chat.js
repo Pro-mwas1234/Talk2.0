@@ -68,7 +68,7 @@ let onlineUsers = {};
 let mediaRecorder;
 let audioChunks = [];
 const TYPING_TIMEOUT = 3000;
-const MESSAGE_EXPIRY_MINUTES = 900;
+const MESSAGE_EXPIRY_MINUTES = 525000;
 let failedAuthAttempts = 0;
 const MAX_AUTH_ATTEMPTS = 5;
 const AUTH_TIMEOUT = 30000;
