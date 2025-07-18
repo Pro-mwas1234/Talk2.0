@@ -3,7 +3,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyDrltFCORxJ5HpGMlho7FWj1Pk1G0BjLso",
   authDomain: "nini-1bbf7.firebaseapp.com",
   projectId: "nini-1bbf7",
-  storageBucket: "nini-1bbf7.firebasestorage.app",
+  storageBucket: "nini-1bbf7.appspot.com",
   messagingSenderId: "330113060420",
   appId: "1:330113060420:web:7eca36a70c81c63237b611",
   measurementId: "G-ZMCHFDQGDV"
@@ -14,45 +14,51 @@ firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
 const auth = firebase.auth();
 
-// DOM Elements
+// DOM Elements with null checks
+const getElementSafe = (id) => {
+  const el = document.getElementById(id);
+  if (!el) console.warn(`Element with ID ${id} not found`);
+  return el || document.createElement('div'); // Return dummy element if not found
+};
+
 const elements = {
-    messagesContainer: document.getElementById('messagesContainer'),
-    messageInput: document.getElementById('messageInput'),
-    sendButton: document.getElementById('sendButton'),
-    emojiButton: document.getElementById('emojiButton'),
-    emojiPicker: document.getElementById('emojiPicker'),
-    attachButton: document.getElementById('attachButton'),
-    fileInput: document.getElementById('fileInput'),
-    typingIndicator: document.getElementById('typingIndicator'),
-    typingUsers: document.getElementById('typingUsers'),
-    darkModeToggle: document.getElementById('darkModeToggle'),
-    replyPreview: document.getElementById('replyPreview'),
-    cancelReply: document.getElementById('cancelReply'),
-    onlineUsersToggle: document.getElementById('onlineUsersToggle'),
-    onlineUsersPanel: document.getElementById('onlineUsersPanel'),
-    onlineUsersList: document.getElementById('onlineUsersList'),
-    authModal: document.getElementById('authModal'),
-    loginForm: document.getElementById('loginForm'),
-    registerForm: document.getElementById('registerForm'),
-    loginEmail: document.getElementById('loginEmail'),
-    loginPassword: document.getElementById('loginPassword'),
-    loginBtn: document.getElementById('loginBtn'),
-    registerName: document.getElementById('registerName'),
-    registerEmail: document.getElementById('registerEmail'),
-    registerPassword: document.getElementById('registerPassword'),
-    registerBtn: document.getElementById('registerBtn'),
-    authTabs: document.getElementById('authTabs'),
-    usernameModal: document.getElementById('usernameModal'),
-    usernameInput: document.getElementById('usernameInput'),
-    usernameAvailability: document.getElementById('usernameAvailability'),
-    submitUsernameBtn: document.getElementById('submitUsernameBtn'),
-    startRecording: document.getElementById('startRecording'),
-    stopRecording: document.getElementById('stopRecording'),
-    recordingStatus: document.getElementById('recordingStatus'),
-    chatTitle: document.getElementById('chatTitle'),
-    notificationBadge: document.getElementById('notification-badge'),
-    undoToast: document.getElementById('undoToast'),
-    undoDelete: document.getElementById('undoDelete')
+    messagesContainer: getElementSafe('messagesContainer'),
+    messageInput: getElementSafe('messageInput'),
+    sendButton: getElementSafe('sendButton'),
+    emojiButton: getElementSafe('emojiButton'),
+    emojiPicker: getElementSafe('emojiPicker'),
+    attachButton: getElementSafe('attachButton'),
+    fileInput: getElementSafe('fileInput'),
+    typingIndicator: getElementSafe('typingIndicator'),
+    typingUsers: getElementSafe('typingUsers'),
+    darkModeToggle: getElementSafe('darkModeToggle'),
+    replyPreview: getElementSafe('replyPreview'),
+    cancelReply: getElementSafe('cancelReply'),
+    onlineUsersToggle: getElementSafe('onlineUsersToggle'),
+    onlineUsersPanel: getElementSafe('onlineUsersPanel'),
+    onlineUsersList: getElementSafe('onlineUsersList'),
+    authModal: getElementSafe('authModal'),
+    loginForm: getElementSafe('loginForm'),
+    registerForm: getElementSafe('registerForm'),
+    loginEmail: getElementSafe('loginEmail'),
+    loginPassword: getElementSafe('loginPassword'),
+    loginBtn: getElementSafe('loginBtn'),
+    registerName: getElementSafe('registerName'),
+    registerEmail: getElementSafe('registerEmail'),
+    registerPassword: getElementSafe('registerPassword'),
+    registerBtn: getElementSafe('registerBtn'),
+    authTabs: getElementSafe('authTabs'),
+    usernameModal: getElementSafe('usernameModal'),
+    usernameInput: getElementSafe('usernameInput'),
+    usernameAvailability: getElementSafe('usernameAvailability'),
+    submitUsernameBtn: getElementSafe('submitUsernameBtn'),
+    startRecording: getElementSafe('startRecording'),
+    stopRecording: getElementSafe('stopRecording'),
+    recordingStatus: getElementSafe('recordingStatus'),
+    chatTitle: getElementSafe('chatTitle'),
+    notificationBadge: getElementSafe('notification-badge'),
+    undoToast: getElementSafe('undoToast'),
+    undoDelete: getElementSafe('undoDelete')
 };
 
 // App State
@@ -103,21 +109,26 @@ function checkNotificationPermission() {
 // Show notification for new message
 function showNotification(message) {
     if (!document.hasFocus() && notificationPermission) {
-        const notification = new Notification('New Message', {
-            body: `${message.senderName}: ${message.text || '[Media]'}`,
-            icon: 'https://img.icons8.com/cotton/100/filled-chat--v1.png'
-        });
-        notificationSound.play();
-        
-        notification.onclick = () => {
-            window.focus();
-            notification.close();
-            resetUnreadCount();
-        };
+        try {
+            const notification = new Notification('New Message', {
+                body: `${message.senderName}: ${message.text || '[Media]'}`,
+                icon: 'https://img.icons8.com/cotton/100/filled-chat--v1.png'
+            });
+            
+            notificationSound.play().catch(e => console.log("Notification sound error:", e));
+            
+            notification.onclick = () => {
+                window.focus();
+                notification.close();
+                resetUnreadCount();
+            };
+        } catch (error) {
+            console.log("Notification error:", error);
+        }
     }
     
-    // Update badge count
-    if (!document.hasFocus()) {
+    // Update badge count if element exists
+    if (!document.hasFocus() && elements.notificationBadge) {
         unreadCount++;
         elements.notificationBadge.textContent = unreadCount;
         elements.notificationBadge.style.display = 'flex';
@@ -126,7 +137,9 @@ function showNotification(message) {
 
 function resetUnreadCount() {
     unreadCount = 0;
-    elements.notificationBadge.style.display = 'none';
+    if (elements.notificationBadge) {
+        elements.notificationBadge.style.display = 'none';
+    }
 }
 
 // Initialize App
@@ -141,42 +154,57 @@ function init() {
     detectIOS();
     setupEmojiPicker();
     
-    if (!window.MediaRecorder) {
+    if (!window.MediaRecorder && elements.startRecording) {
         elements.startRecording.style.display = 'none';
         console.warn("Voice recording not supported in this browser");
     }
     
-    // Reset badge when window gets focus
     window.addEventListener('focus', resetUnreadCount);
 }
 
 // Authentication Functions
 function setupAuth() {
+    if (!elements.authTabs) return;
+
     elements.authTabs.querySelectorAll('.auth-tab').forEach(tab => {
         tab.addEventListener('click', () => {
-            elements.authTabs.querySelector('.active').classList.remove('active');
+            elements.authTabs.querySelector('.active')?.classList.remove('active');
             tab.classList.add('active');
-            elements.loginForm.style.display = tab.dataset.tab === 'login' ? 'flex' : 'none';
-            elements.registerForm.style.display = tab.dataset.tab === 'register' ? 'flex' : 'none';
+            if (elements.loginForm) {
+                elements.loginForm.style.display = tab.dataset.tab === 'login' ? 'flex' : 'none';
+            }
+            if (elements.registerForm) {
+                elements.registerForm.style.display = tab.dataset.tab === 'register' ? 'flex' : 'none';
+            }
         });
     });
 
-    elements.loginBtn.addEventListener('click', handleLogin);
-    elements.loginPassword.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleLogin();
-    });
+    if (elements.loginBtn) {
+        elements.loginBtn.addEventListener('click', handleLogin);
+    }
+    if (elements.loginPassword) {
+        elements.loginPassword.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleLogin();
+        });
+    }
 
-    elements.registerBtn.addEventListener('click', handleRegister);
-    elements.registerPassword.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleRegister();
-    });
+    if (elements.registerBtn) {
+        elements.registerBtn.addEventListener('click', handleRegister);
+    }
+    if (elements.registerPassword) {
+        elements.registerPassword.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleRegister();
+        });
+    }
 
     const resetLink = document.createElement('a');
     resetLink.href = '#';
     resetLink.textContent = 'Forgot password?';
     resetLink.className = 'reset-password';
     resetLink.addEventListener('click', handlePasswordReset);
-    elements.loginForm.appendChild(resetLink);
+    if (elements.loginForm) {
+        elements.loginForm.appendChild(resetLink);
+    }
 }
 
 async function handleLogin() {
@@ -185,8 +213,8 @@ async function handleLogin() {
         return;
     }
 
-    const email = elements.loginEmail.value.trim();
-    const password = elements.loginPassword.value;
+    const email = elements.loginEmail?.value.trim() || '';
+    const password = elements.loginPassword?.value || '';
 
     if (!validateEmail(email)) {
         alert('Please enter a valid email address');
@@ -212,9 +240,9 @@ async function handleLogin() {
 }
 
 async function handleRegister() {
-    const name = elements.registerName.value.trim();
-    const email = elements.registerEmail.value.trim();
-    const password = elements.registerPassword.value;
+    const name = elements.registerName?.value.trim() || '';
+    const email = elements.registerEmail?.value.trim() || '';
+    const password = elements.registerPassword?.value || '';
 
     if (!name || !email || !password) {
         alert('Please fill all fields');
@@ -292,37 +320,47 @@ function getEnhancedAuthErrorMessage(errorCode) {
 
 // Username Management
 function setupUsernameSelection() {
-    elements.usernameInput.addEventListener('input', debounce(checkUsernameAvailability, 500));
-    elements.submitUsernameBtn.addEventListener('click', saveUsername);
+    if (elements.usernameInput) {
+        elements.usernameInput.addEventListener('input', debounce(checkUsernameAvailability, 500));
+    }
+    if (elements.submitUsernameBtn) {
+        elements.submitUsernameBtn.addEventListener('click', saveUsername);
+    }
 }
 
 async function checkUsernameAvailability() {
-    const username = elements.usernameInput.value.trim();
+    const username = elements.usernameInput?.value.trim() || '';
     
     if (!username.match(/^[a-zA-Z0-9_]{3,15}$/)) {
-        elements.usernameAvailability.textContent = '3-15 alphanumeric characters';
-        elements.usernameAvailability.className = 'username-taken';
+        if (elements.usernameAvailability) {
+            elements.usernameAvailability.textContent = '3-15 alphanumeric characters';
+            elements.usernameAvailability.className = 'username-taken';
+        }
         return;
     }
 
     try {
         const snapshot = await usernamesRef.child(username.toLowerCase()).once('value');
-        if (snapshot.exists()) {
-            elements.usernameAvailability.textContent = 'Username taken';
-            elements.usernameAvailability.className = 'username-taken';
-        } else {
-            elements.usernameAvailability.textContent = 'Username available';
-            elements.usernameAvailability.className = 'username-available';
+        if (elements.usernameAvailability) {
+            if (snapshot.exists()) {
+                elements.usernameAvailability.textContent = 'Username taken';
+                elements.usernameAvailability.className = 'username-taken';
+            } else {
+                elements.usernameAvailability.textContent = 'Username available';
+                elements.usernameAvailability.className = 'username-available';
+            }
         }
     } catch (error) {
         console.error("Error checking username:", error);
-        elements.usernameAvailability.textContent = 'Error checking';
-        elements.usernameAvailability.className = 'username-taken';
+        if (elements.usernameAvailability) {
+            elements.usernameAvailability.textContent = 'Error checking';
+            elements.usernameAvailability.className = 'username-taken';
+        }
     }
 }
 
 async function saveUsername() {
-    const username = elements.usernameInput.value.trim();
+    const username = elements.usernameInput?.value.trim() || '';
     
     if (!username.match(/^[a-zA-Z0-9_]{3,15}$/)) {
         alert('Username must be 3-15 alphanumeric characters');
@@ -330,13 +368,11 @@ async function saveUsername() {
     }
 
     try {
-        // Check availability again right before saving
         const snapshot = await usernamesRef.child(username.toLowerCase()).once('value');
         if (snapshot.exists()) {
             throw new Error('Username already taken');
         }
 
-        // Atomic updates
         const updates = {};
         updates[`usernames/${username.toLowerCase()}`] = currentUser.id;
         updates[`users/${currentUser.id}/username`] = username;
@@ -352,8 +388,10 @@ async function saveUsername() {
         setupPresence();
     } catch (error) {
         console.error("Username save error:", error);
-        elements.usernameAvailability.textContent = 'Error saving username';
-        elements.usernameAvailability.className = 'username-taken';
+        if (elements.usernameAvailability) {
+            elements.usernameAvailability.textContent = 'Error saving username';
+            elements.usernameAvailability.className = 'username-taken';
+        }
         alert(error.message.includes('taken') 
             ? 'Username already taken. Please choose another.' 
             : 'Error saving username. Please try again.');
@@ -364,22 +402,18 @@ async function saveUsername() {
 function setupPresence() {
     if (!currentUser.id) return;
 
-    // Set initial online status
     const userStatusRef = usersRef.child(currentUser.id);
     
-    // Update status to online
     userStatusRef.update({
         isOnline: true,
         lastActive: firebase.database.ServerValue.TIMESTAMP
     });
 
-    // Setup onDisconnect handler
     userStatusRef.onDisconnect().update({
         isOnline: false,
         lastActive: firebase.database.ServerValue.TIMESTAMP
     });
 
-    // Update lastActive periodically
     const presenceInterval = setInterval(() => {
         if (currentUser.id) {
             userStatusRef.update({
@@ -390,10 +424,11 @@ function setupPresence() {
         }
     }, 30000);
 
-    // Listen for online users
     usersRef.orderByChild('isOnline').equalTo(true).on('value', (snapshot) => {
         onlineUsers = {};
-        elements.onlineUsersList.innerHTML = '';
+        if (elements.onlineUsersList) {
+            elements.onlineUsersList.innerHTML = '';
+        }
         
         snapshot.forEach((childSnapshot) => {
             const user = childSnapshot.val();
@@ -401,7 +436,7 @@ function setupPresence() {
             
             onlineUsers[childSnapshot.key] = user;
             
-            if (childSnapshot.key !== currentUser.id) {
+            if (childSnapshot.key !== currentUser.id && elements.onlineUsersList) {
                 const userElement = document.createElement('div');
                 userElement.className = 'online-user';
                 userElement.innerHTML = `
@@ -413,8 +448,7 @@ function setupPresence() {
             }
         });
         
-        // Show/hide panel if empty
-        if (elements.onlineUsersList.children.length === 0) {
+        if (elements.onlineUsersList && elements.onlineUsersList.children.length === 0) {
             elements.onlineUsersList.innerHTML = '<div class="no-users">No other users online</div>';
         }
     });
@@ -422,7 +456,7 @@ function setupPresence() {
 
 // Message Functions
 function sendMessage() {
-    const messageText = elements.messageInput.value.trim();
+    const messageText = elements.messageInput?.value.trim() || '';
     if (!messageText || !currentUser.id) return;
 
     const sanitizedText = escapeHtml(messageText).substring(0, 1000);
@@ -444,8 +478,8 @@ function sendMessage() {
     newMessageRef.set(messageData)
         .then(() => {
             newMessageRef.update({ status: 'delivered' });
-            elements.messageInput.value = '';
-            elements.sendButton.disabled = true;
+            if (elements.messageInput) elements.messageInput.value = '';
+            if (elements.sendButton) elements.sendButton.disabled = true;
             updateTyping(false);
             
             if (replyingTo) {
@@ -521,7 +555,6 @@ function loadMessages() {
         const message = snapshot.val();
         const isExpired = isMessageExpired(message);
         
-        // Show notification for new messages from others
         if (message.senderId !== currentUser.id && 
             message.timestamp > lastMessageTimestamp) {
             lastMessageTimestamp = message.timestamp;
@@ -539,7 +572,9 @@ function loadMessages() {
 
     typingRef.on('value', (snapshot) => {
         const typingData = snapshot.val() || {};
-        elements.typingUsers.innerHTML = '';
+        if (elements.typingUsers) {
+            elements.typingUsers.innerHTML = '';
+        }
         
         const activeTypers = Object.entries(typingData)
             .filter(([userId, userName]) => 
@@ -548,7 +583,7 @@ function loadMessages() {
                 onlineUsers[userId]
             );
         
-        if (activeTypers.length > 0) {
+        if (activeTypers.length > 0 && elements.typingUsers) {
             activeTypers.forEach(([userId, userName]) => {
                 const typingElement = document.createElement('div');
                 typingElement.className = 'typing-user';
@@ -560,15 +595,17 @@ function loadMessages() {
                 `;
                 elements.typingUsers.appendChild(typingElement);
             });
-            elements.typingIndicator.style.display = 'block';
-        } else {
+            if (elements.typingIndicator) {
+                elements.typingIndicator.style.display = 'block';
+            }
+        } else if (elements.typingIndicator) {
             elements.typingIndicator.style.display = 'none';
         }
     });
 }
 
 function displayMessage(message, messageId, isExpired = false) {
-    if (message.deleted || isExpired) return;
+    if (!elements.messagesContainer || message.deleted || isExpired) return;
     
     const messageElement = document.createElement('div');
     messageElement.className = `message ${message.senderId === currentUser.id ? 'sent' : 'received'}`;
@@ -579,7 +616,6 @@ function displayMessage(message, messageId, isExpired = false) {
 
     let messageContent = '';
     
-    // Handle replies
     if (message.replyTo) {
         messagesRef.child(message.replyTo).once('value', (snapshot) => {
             const originalMessage = snapshot.val();
@@ -604,7 +640,6 @@ function displayMessage(message, messageId, isExpired = false) {
         });
     }
 
-    // Build message content based on type
     if (message.type === 'voice') {
         messageContent = `
             <div class="message-header">
@@ -647,7 +682,6 @@ function displayMessage(message, messageId, isExpired = false) {
         messageContent = message.text;
     }
 
-    // Add message actions if not expired
     if (!isExpired && message.senderId && message.type !== 'system') {
         const actionsDiv = document.createElement('div');
         actionsDiv.className = 'message-actions';
@@ -679,7 +713,6 @@ function displayMessage(message, messageId, isExpired = false) {
     messageElement.innerHTML += messageContent;
     elements.messagesContainer.appendChild(messageElement);
     
-    // Mark as read if received
     if (message.senderId !== currentUser.id && !message.read) {
         messagesRef.child(messageId).update({ read: true });
     }
@@ -693,28 +726,23 @@ async function deleteMessage(messageId) {
     if (!messageElement) return;
     
     try {
-        // Store reference for undo
         lastDeletedMessage = {
             id: messageId,
             element: messageElement.cloneNode(true),
             data: await getMessageData(messageId)
         };
         
-        // UI feedback
         messageElement.classList.add('deleting');
         const deleteBtn = messageElement.querySelector('.delete-btn');
         if (deleteBtn) deleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
         
-        // Mark as deleted in Firebase
         await messagesRef.child(messageId).update({ 
             deleted: true,
             deletedAt: firebase.database.ServerValue.TIMESTAMP
         });
         
-        // Show undo toast
         showUndoToast();
         
-        // Final removal after timeout
         undoTimeout = setTimeout(() => {
             messageElement.remove();
             hideUndoToast();
@@ -737,12 +765,14 @@ async function getMessageData(messageId) {
 }
 
 function showUndoToast() {
+    if (!elements.undoToast) return;
     const toast = elements.undoToast;
     toast.style.display = 'flex';
     setTimeout(() => toast.style.opacity = '1', 10);
 }
 
 function hideUndoToast() {
+    if (!elements.undoToast) return;
     const toast = elements.undoToast;
     toast.style.opacity = '0';
     setTimeout(() => toast.style.display = 'none', 300);
@@ -755,13 +785,11 @@ async function undoDelete() {
     hideUndoToast();
     
     try {
-        // Restore in Firebase
         await messagesRef.child(lastDeletedMessage.id).update({
             deleted: false,
             deletedAt: null
         });
         
-        // Restore in UI if element was removed
         if (!document.querySelector(`[data-message-id="${lastDeletedMessage.id}"]`)) {
             elements.messagesContainer.appendChild(lastDeletedMessage.element);
         }
@@ -774,29 +802,25 @@ async function undoDelete() {
     lastDeletedMessage = null;
 }
 
-// Improved reply system
 function setupReply(messageId, messageText, senderName) {
-    // Cancel any existing reply
     if (replyingTo) {
         const previousMessage = document.querySelector(`[data-message-id="${replyingTo}"]`);
         if (previousMessage) previousMessage.classList.remove('replying-to');
     }
 
     replyingTo = messageId;
-    elements.replyPreview.style.display = 'flex';
+    if (elements.replyPreview) {
+        elements.replyPreview.style.display = 'flex';
+        elements.replyPreview.querySelector('.reply-preview-text').innerHTML = `
+            <span>Replying to <strong>${senderName}</strong>:</span>
+            <span class="reply-content">${escapeHtml(truncateText(messageText, 50))}</span>
+        `;
+        
+        elements.replyPreview.querySelector('.reply-content').onclick = () => {
+            scrollToMessage(messageId);
+        };
+    }
     
-    // Improved preview with click-to-scroll
-    elements.replyPreview.querySelector('.reply-preview-text').innerHTML = `
-        <span>Replying to <strong>${senderName}</strong>:</span>
-        <span class="reply-content">${escapeHtml(truncateText(messageText, 50))}</span>
-    `;
-    
-    // Make preview clickable
-    elements.replyPreview.querySelector('.reply-content').onclick = () => {
-        scrollToMessage(messageId);
-    };
-    
-    // Highlight original message
     scrollToMessage(messageId, true);
 }
 
@@ -822,7 +846,9 @@ function cancelReply() {
         const originalMessage = document.querySelector(`[data-message-id="${replyingTo}"]`);
         if (originalMessage) originalMessage.classList.remove('replying-to');
     }
-    elements.replyPreview.style.display = 'none';
+    if (elements.replyPreview) {
+        elements.replyPreview.style.display = 'none';
+    }
     replyingTo = null;
 }
 
@@ -840,9 +866,9 @@ function startRecording() {
             mediaRecorder.onstop = processRecording;
             mediaRecorder.start(100);
             
-            elements.startRecording.style.display = 'none';
-            elements.stopRecording.style.display = 'block';
-            elements.recordingStatus.style.display = 'block';
+            if (elements.startRecording) elements.startRecording.style.display = 'none';
+            if (elements.stopRecording) elements.stopRecording.style.display = 'block';
+            if (elements.recordingStatus) elements.recordingStatus.style.display = 'block';
         })
         .catch(err => {
             console.error("Recording failed:", err);
@@ -886,9 +912,9 @@ function processRecording() {
                 console.error("Error sending voice message:", error);
             });
         
-        elements.startRecording.style.display = 'block';
-        elements.stopRecording.style.display = 'none';
-        elements.recordingStatus.style.display = 'none';
+        if (elements.startRecording) elements.startRecording.style.display = 'block';
+        if (elements.stopRecording) elements.stopRecording.style.display = 'none';
+        if (elements.recordingStatus) elements.recordingStatus.style.display = 'none';
         audioChunks = [];
     };
     
@@ -897,6 +923,8 @@ function processRecording() {
 
 // Emoji Picker
 function setupEmojiPicker() {
+    if (!elements.emojiButton || !elements.emojiPicker) return;
+
     elements.emojiButton.addEventListener('click', (e) => {
         e.stopPropagation();
         elements.emojiPicker.classList.toggle('active');
@@ -904,13 +932,15 @@ function setupEmojiPicker() {
 
     elements.emojiPicker.addEventListener('emoji-click', (event) => {
         const emoji = event.detail.unicode;
-        elements.messageInput.value += emoji;
-        elements.emojiPicker.classList.remove('active');
-        elements.messageInput.focus();
+        if (elements.messageInput) {
+            elements.messageInput.value += emoji;
+            elements.emojiPicker.classList.remove('active');
+            elements.messageInput.focus();
+        }
     });
 
     document.addEventListener('click', (e) => {
-        if (!elements.emojiButton.contains(e.target) && !elements.emojiPicker.contains(e.target)) {
+        if (!elements.emojiButton?.contains(e.target) && !elements.emojiPicker?.contains(e.target)) {
             elements.emojiPicker.classList.remove('active');
         }
     });
@@ -964,6 +994,7 @@ function cleanExpiredMessages() {
 }
 
 function sendSystemMessage(text, type = 'system') {
+    if (!elements.messagesContainer) return;
     const messageElement = document.createElement('div');
     messageElement.className = `message system ${type}`;
     messageElement.textContent = text;
@@ -972,6 +1003,7 @@ function sendSystemMessage(text, type = 'system') {
 }
 
 function scrollToBottom() {
+    if (!elements.messagesContainer) return;
     setTimeout(() => {
         elements.messagesContainer.scrollTop = elements.messagesContainer.scrollHeight;
     }, 100);
@@ -989,63 +1021,83 @@ function escapeHtml(unsafe) {
 
 // UI Helpers
 function setupEventListeners() {
-    elements.darkModeToggle.addEventListener('click', toggleDarkMode);
-    elements.sendButton.addEventListener('click', sendMessage);
-    elements.messageInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter' && !elements.sendButton.disabled) {
-            sendMessage();
-        }
-    });
-    elements.messageInput.addEventListener('input', () => {
-        elements.sendButton.disabled = elements.messageInput.value.trim() === '';
-        updateTyping(elements.messageInput.value.trim() !== '');
-    });
-    elements.attachButton.addEventListener('click', () => elements.fileInput.click());
-    elements.fileInput.addEventListener('change', handleFileUpload);
-    elements.startRecording.addEventListener('click', startRecording);
-    elements.stopRecording.addEventListener('click', stopRecording);
-    elements.cancelReply.addEventListener('click', cancelReply);
-    elements.onlineUsersToggle.addEventListener('click', toggleOnlineUsersPanel);
-    elements.undoDelete.addEventListener('click', undoDelete);
+    if (elements.darkModeToggle) {
+        elements.darkModeToggle.addEventListener('click', toggleDarkMode);
+    }
+    if (elements.sendButton) {
+        elements.sendButton.addEventListener('click', sendMessage);
+    }
+    if (elements.messageInput) {
+        elements.messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && elements.sendButton && !elements.sendButton.disabled) {
+                sendMessage();
+            }
+        });
+        elements.messageInput.addEventListener('input', () => {
+            if (elements.sendButton) {
+                elements.sendButton.disabled = elements.messageInput.value.trim() === '';
+            }
+            updateTyping(elements.messageInput.value.trim() !== '');
+        });
+    }
+    if (elements.attachButton) {
+        elements.attachButton.addEventListener('click', () => elements.fileInput?.click());
+    }
+    if (elements.fileInput) {
+        elements.fileInput.addEventListener('change', handleFileUpload);
+    }
+    if (elements.startRecording) {
+        elements.startRecording.addEventListener('click', startRecording);
+    }
+    if (elements.stopRecording) {
+        elements.stopRecording.addEventListener('click', stopRecording);
+    }
+    if (elements.cancelReply) {
+        elements.cancelReply.addEventListener('click', cancelReply);
+    }
+    if (elements.onlineUsersToggle) {
+        elements.onlineUsersToggle.addEventListener('click', toggleOnlineUsersPanel);
+    }
+    if (elements.undoDelete) {
+        elements.undoDelete.addEventListener('click', undoDelete);
+    }
     
-    // Handle message clicks for desktop
-    elements.messagesContainer.addEventListener('click', (e) => {
-        const messageElement = e.target.closest('.message');
-        if (!messageElement) {
-            // Click outside any message - hide all actions
+    if (elements.messagesContainer) {
+        elements.messagesContainer.addEventListener('click', (e) => {
+            const messageElement = e.target.closest('.message');
+            if (!messageElement) {
+                document.querySelectorAll('.message').forEach(msg => {
+                    msg.classList.remove('active');
+                });
+                return;
+            }
+            
             document.querySelectorAll('.message').forEach(msg => {
                 msg.classList.remove('active');
             });
-            return;
-        }
-        
-        // Toggle active state for clicked message
-        document.querySelectorAll('.message').forEach(msg => {
-            msg.classList.remove('active');
+            messageElement.classList.add('active');
         });
-        messageElement.classList.add('active');
-    });
-    
-    // Handle reply and delete button clicks
-    elements.messagesContainer.addEventListener('click', (e) => {
-        const replyBtn = e.target.closest('.reply-btn');
-        const deleteBtn = e.target.closest('.delete-btn');
         
-        if (replyBtn) {
-            e.stopPropagation();
-            const messageElement = replyBtn.closest('.message');
-            const messageId = messageElement.dataset.messageId;
-            const messageText = messageElement.querySelector('.message-text')?.textContent || '[Media]';
-            const senderName = messageElement.querySelector('.message-username')?.textContent || 'Unknown';
-            setupReply(messageId, messageText, senderName);
-        }
-        
-        if (deleteBtn) {
-            e.stopPropagation();
-            const messageId = deleteBtn.dataset.messageId;
-            deleteMessage(messageId);
-        }
-    });
+        elements.messagesContainer.addEventListener('click', (e) => {
+            const replyBtn = e.target.closest('.reply-btn');
+            const deleteBtn = e.target.closest('.delete-btn');
+            
+            if (replyBtn) {
+                e.stopPropagation();
+                const messageElement = replyBtn.closest('.message');
+                const messageId = messageElement.dataset.messageId;
+                const messageText = messageElement.querySelector('.message-text')?.textContent || '[Media]';
+                const senderName = messageElement.querySelector('.message-username')?.textContent || 'Unknown';
+                setupReply(messageId, messageText, senderName);
+            }
+            
+            if (deleteBtn) {
+                e.stopPropagation();
+                const messageId = deleteBtn.dataset.messageId;
+                deleteMessage(messageId);
+            }
+        });
+    }
     
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && replyingTo) {
@@ -1055,6 +1107,7 @@ function setupEventListeners() {
 }
 
 function toggleOnlineUsersPanel() {
+    if (!elements.onlineUsersPanel) return;
     elements.onlineUsersPanel.classList.toggle('show');
     
     if (elements.onlineUsersPanel.classList.contains('show')) {
@@ -1078,7 +1131,9 @@ function setupMobileFeatures() {
         const newState = window.innerHeight < window.outerHeight;
         if (newState !== isKeyboardOpen) {
             isKeyboardOpen = newState;
-            keyboardHelper.style.height = isKeyboardOpen ? '300px' : '0';
+            if (keyboardHelper) {
+                keyboardHelper.style.height = isKeyboardOpen ? '300px' : '0';
+            }
             if (!isKeyboardOpen) scrollToBottom();
         }
     });
@@ -1094,7 +1149,7 @@ function setupMobileFeatures() {
         lastTouch = now;
     }, {passive: false});
     
-    if ('ontouchstart' in window) {
+    if ('ontouchstart' in window && elements.onlineUsersToggle) {
         elements.onlineUsersToggle.addEventListener('touchstart', (e) => {
             e.preventDefault();
             toggleOnlineUsersPanel();
@@ -1106,7 +1161,9 @@ function detectIOS() {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     if (isIOS) {
         document.body.classList.add('ios');
-        elements.messageInput.style.fontSize = '16px';
+        if (elements.messageInput) {
+            elements.messageInput.style.fontSize = '16px';
+        }
     }
 }
 
@@ -1120,28 +1177,34 @@ function toggleDarkMode() {
 function updateDarkMode() {
     const darkMode = localStorage.getItem('darkMode') === 'true';
     document.body.classList.toggle('dark-mode', darkMode);
-    elements.darkModeToggle.innerHTML = darkMode ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
-    elements.darkModeToggle.title = darkMode ? 'Switch to light mode' : 'Switch to dark mode';
+    if (elements.darkModeToggle) {
+        elements.darkModeToggle.innerHTML = darkMode ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+        elements.darkModeToggle.title = darkMode ? 'Switch to light mode' : 'Switch to dark mode';
+    }
 }
 
 // Modal Control
 function showAuthModal() {
-    elements.authModal.classList.add('show');
-    elements.loginEmail.focus();
+    if (elements.authModal) {
+        elements.authModal.classList.add('show');
+        if (elements.loginEmail) elements.loginEmail.focus();
+    }
 }
 
 function hideAuthModals() {
-    elements.authModal.classList.remove('show');
-    elements.usernameModal.classList.remove('show');
+    if (elements.authModal) elements.authModal.classList.remove('show');
+    if (elements.usernameModal) elements.usernameModal.classList.remove('show');
 }
 
 function showUsernameModal() {
-    elements.usernameModal.classList.add('show');
-    elements.usernameInput.focus();
+    if (elements.usernameModal) {
+        elements.usernameModal.classList.add('show');
+        if (elements.usernameInput) elements.usernameInput.focus();
+    }
 }
 
 function hideUsernameModal() {
-    elements.usernameModal.classList.remove('show');
+    if (elements.usernameModal) elements.usernameModal.classList.remove('show');
 }
 
 // Auth State Handler
