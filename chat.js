@@ -14,60 +14,55 @@ firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
 const auth = firebase.auth();
 
-// DOM Elements with null checks
-const getElementSafe = (id) => {
-  const el = document.getElementById(id);
-  if (!el) console.warn(`Element with ID ${id} not found`);
-  return el || document.createElement('div'); // Return dummy element if not found
-};
-
+// DOM Elements
 const elements = {
-    messagesContainer: getElementSafe('messagesContainer'),
-    messageInput: getElementSafe('messageInput'),
-    sendButton: getElementSafe('sendButton'),
-    emojiButton: getElementSafe('emojiButton'),
-    emojiPicker: getElementSafe('emojiPicker'),
-    attachButton: getElementSafe('attachButton'),
-    fileInput: getElementSafe('fileInput'),
-    typingIndicator: getElementSafe('typingIndicator'),
-    typingUsers: getElementSafe('typingUsers'),
-    darkModeToggle: getElementSafe('darkModeToggle'),
-    replyPreview: getElementSafe('replyPreview'),
-    cancelReply: getElementSafe('cancelReply'),
-    onlineUsersToggle: getElementSafe('onlineUsersToggle'),
-    onlineUsersPanel: getElementSafe('onlineUsersPanel'),
-    onlineUsersList: getElementSafe('onlineUsersList'),
-    authModal: getElementSafe('authModal'),
-    loginForm: getElementSafe('loginForm'),
-    registerForm: getElementSafe('registerForm'),
-    loginEmail: getElementSafe('loginEmail'),
-    loginPassword: getElementSafe('loginPassword'),
-    loginBtn: getElementSafe('loginBtn'),
-    registerName: getElementSafe('registerName'),
-    registerEmail: getElementSafe('registerEmail'),
-    registerPassword: getElementSafe('registerPassword'),
-    registerBtn: getElementSafe('registerBtn'),
-    authTabs: getElementSafe('authTabs'),
-    usernameModal: getElementSafe('usernameModal'),
-    usernameInput: getElementSafe('usernameInput'),
-    usernameAvailability: getElementSafe('usernameAvailability'),
-    submitUsernameBtn: getElementSafe('submitUsernameBtn'),
-    startRecording: getElementSafe('startRecording'),
-    stopRecording: getElementSafe('stopRecording'),
-    recordingStatus: getElementSafe('recordingStatus'),
-    chatTitle: getElementSafe('chatTitle'),
-    notificationBadge: getElementSafe('notification-badge'),
-    undoToast: getElementSafe('undoToast'),
-    undoDelete: getElementSafe('undoDelete')
+  messagesContainer: document.getElementById('messagesContainer'),
+  messageInput: document.getElementById('messageInput'),
+  sendButton: document.getElementById('sendButton'),
+  emojiButton: document.getElementById('emojiButton'),
+  emojiPicker: document.getElementById('emojiPicker'),
+  attachButton: document.getElementById('attachButton'),
+  fileInput: document.getElementById('fileInput'),
+  typingIndicator: document.getElementById('typingIndicator'),
+  typingUsers: document.getElementById('typingUsers'),
+  darkModeToggle: document.getElementById('darkModeToggle'),
+  replyPreview: document.getElementById('replyPreview'),
+  cancelReply: document.getElementById('cancelReply'),
+  onlineUsersToggle: document.getElementById('onlineUsersToggle'),
+  onlineUsersPanel: document.getElementById('onlineUsersPanel'),
+  onlineUsersList: document.getElementById('onlineUsersList'),
+  authModal: document.getElementById('authModal'),
+  loginForm: document.getElementById('loginForm'),
+  registerForm: document.getElementById('registerForm'),
+  loginEmail: document.getElementById('loginEmail'),
+  loginPassword: document.getElementById('loginPassword'),
+  loginBtn: document.getElementById('loginBtn'),
+  registerName: document.getElementById('registerName'),
+  registerEmail: document.getElementById('registerEmail'),
+  registerPassword: document.getElementById('registerPassword'),
+  registerBtn: document.getElementById('registerBtn'),
+  authTabs: document.getElementById('authTabs'),
+  usernameModal: document.getElementById('usernameModal'),
+  usernameInput: document.getElementById('usernameInput'),
+  usernameAvailability: document.getElementById('usernameAvailability'),
+  submitUsernameBtn: document.getElementById('submitUsernameBtn'),
+  startRecording: document.getElementById('startRecording'),
+  stopRecording: document.getElementById('stopRecording'),
+  recordingStatus: document.getElementById('recordingStatus'),
+  chatTitle: document.getElementById('chatTitle'),
+  notificationBadge: document.querySelector('.notification-badge'),
+  undoToast: document.getElementById('undoToast'),
+  undoDelete: document.getElementById('undoDelete')
 };
 
 // App State
 let currentUser = {
-    id: null,
-    name: null,
-    username: null,
-    isAuthenticated: false
+  id: null,
+  name: null,
+  username: null,
+  isAuthenticated: false
 };
+
 let isTyping = false;
 let lastTypingTime = 0;
 let expiryTimer = null;
@@ -94,53 +89,212 @@ const typingRef = database.ref('typing');
 const usersRef = database.ref('users');
 const usernamesRef = database.ref('usernames');
 
-// Check notification permission
-function checkNotificationPermission() {
-    if ('Notification' in window) {
-        Notification.requestPermission().then(permission => {
-            notificationPermission = permission === 'granted';
-            if (!notificationPermission) {
-                console.log('Notification permission denied');
-            }
-        });
-    }
+// Message Status Constants
+const MESSAGE_STATUS = {
+  SENT: 'sent',
+  DELIVERED: 'delivered',
+  READ: 'read'
+};
+
+// Initialize App
+function init() {
+  checkNotificationPermission();
+  auth.onAuthStateChanged(handleAuthStateChange);
+  setupAuth();
+  setupUsernameSelection();
+  updateDarkMode();
+  setupEventListeners();
+  setupMobileFeatures();
+  detectIOS();
+  setupEmojiPicker();
+  
+  if (!window.MediaRecorder && elements.startRecording) {
+    elements.startRecording.style.display = 'none';
+    console.warn("Voice recording not supported in this browser");
+  }
+  
+  window.addEventListener('focus', () => {
+    markMessagesAsRead();
+    resetUnreadCount();
+  });
 }
 
-// Show notification for new message
-function showNotification(message) {
-    if (!document.hasFocus() && notificationPermission) {
-        try {
-            const notification = new Notification('New Message', {
-                body: `${message.senderName}: ${message.text || '[Media]'}`,
-                icon: 'https://img.icons8.com/cotton/100/filled-chat--v1.png'
-            });
-            
-            notificationSound.play().catch(e => console.log("Notification sound error:", e));
-            
-            notification.onclick = () => {
-                window.focus();
-                notification.close();
-                resetUnreadCount();
-            };
-        } catch (error) {
-            console.log("Notification error:", error);
-        }
-    }
+// Message Functions with Status Tracking
+function sendMessage() {
+  const messageText = elements.messageInput.value.trim();
+  if (!messageText || !currentUser.id) return;
+
+  const messageData = {
+    text: messageText,
+    senderId: currentUser.id,
+    senderName: currentUser.username,
+    timestamp: Date.now(),
+    status: MESSAGE_STATUS.SENT,
+    readBy: {}
+  };
+
+  if (replyingTo) {
+    messageData.replyTo = replyingTo;
+  }
+
+  const newMessageRef = messagesRef.push();
+  const messageId = newMessageRef.key;
+
+  // Optimistically display message
+  displayMessage({
+    ...messageData,
+    id: messageId
+  }, true);
+
+  // Send to Firebase
+  newMessageRef.set(messageData)
+    .then(() => {
+      // Update status to delivered
+      newMessageRef.update({ status: MESSAGE_STATUS.DELIVERED });
+      
+      // Setup status listener
+      setupMessageStatusListener(messageId);
+      
+      if (elements.messageInput) elements.messageInput.value = '';
+      if (elements.sendButton) elements.sendButton.disabled = true;
+      updateTyping(false);
+      
+      if (replyingTo) {
+        cancelReply();
+      }
+    })
+    .catch(error => {
+      console.error("Error sending message:", error);
+      markMessageAsFailed(messageId);
+    });
+}
+
+function setupMessageStatusListener(messageId) {
+  messagesRef.child(messageId).on('value', (snapshot) => {
+    const message = snapshot.val();
+    if (!message) return;
     
-    // Update badge count if element exists
-    if (!document.hasFocus() && elements.notificationBadge) {
-        unreadCount++;
-        elements.notificationBadge.textContent = unreadCount;
-        elements.notificationBadge.style.display = 'flex';
+    updateMessageStatusUI(messageId, message.status, message.readBy);
+  });
+}
+
+function updateMessageStatusUI(messageId, status, readBy = {}) {
+  const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+  if (!messageElement) return;
+
+  const statusElement = messageElement.querySelector('.message-status');
+  if (!statusElement) return;
+
+  // Update status icon
+  statusElement.className = `message-status ${status}`;
+  statusElement.innerHTML = status === MESSAGE_STATUS.READ 
+    ? '<i class="fas fa-check-double"></i>' 
+    : '<i class="fas fa-check"></i>';
+
+  // Update read receipts if available
+  if (status === MESSAGE_STATUS.READ && Object.keys(readBy).length > 0) {
+    updateReadReceipts(messageElement, readBy);
+  }
+}
+
+function updateReadReceipts(messageElement, readBy) {
+  let receiptsHtml = '<div class="read-receipts">';
+  Object.keys(readBy).forEach(userId => {
+    receiptsHtml += '<div class="read-receipt" title="Read"></div>';
+  });
+  receiptsHtml += '</div>';
+  
+  const existingReceipts = messageElement.querySelector('.read-receipts');
+  if (existingReceipts) {
+    existingReceipts.innerHTML = receiptsHtml;
+  } else {
+    messageElement.querySelector('.timestamp').insertAdjacentHTML('afterend', receiptsHtml);
+  }
+}
+
+function markMessageAsFailed(messageId) {
+  const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+  if (messageElement) {
+    messageElement.classList.add('error');
+    setTimeout(() => messageElement.classList.remove('error'), 1000);
+  }
+}
+
+function markMessagesAsRead() {
+  const unreadMessages = document.querySelectorAll('.message.received:not(.read)');
+  
+  unreadMessages.forEach(msg => {
+    const messageId = msg.dataset.messageId;
+    if (!messageId) return;
+    
+    messagesRef.child(messageId).update({
+      status: MESSAGE_STATUS.READ,
+      [`readBy/${currentUser.id}`]: true
+    });
+    
+    msg.classList.add('read');
+  });
+}
+
+// Notification System
+function checkNotificationPermission() {
+  if ('Notification' in window) {
+    Notification.requestPermission().then(permission => {
+      notificationPermission = permission === 'granted';
+      if (!notificationPermission) {
+        console.log('Notification permission denied');
+      }
+    });
+  }
+}
+
+function showNotification(message) {
+  // Don't notify if already read by current user
+  if (message.readBy && message.readBy[currentUser.id]) return;
+  
+  // Don't notify about your own messages
+  if (message.senderId === currentUser.id) return;
+  
+  // Don't notify when window is focused
+  if (document.hasFocus()) return;
+
+  if (notificationPermission) {
+    try {
+      const notification = new Notification('New Message', {
+        body: `${message.senderName}: ${message.text || '[Media]'}`,
+        icon: 'https://img.icons8.com/cotton/100/filled-chat--v1.png'
+      });
+      
+      notificationSound.play().catch(e => console.log("Notification sound error:", e));
+      
+      notification.onclick = () => {
+        window.focus();
+        notification.close();
+      };
+    } catch (error) {
+      console.log("Notification error:", error);
     }
+  }
+  
+  // Update badge count
+  updateNotificationBadge();
+}
+
+function updateNotificationBadge() {
+  if (!elements.notificationBadge) return;
+  
+  unreadCount++;
+  elements.notificationBadge.textContent = unreadCount;
+  elements.notificationBadge.style.display = 'flex';
 }
 
 function resetUnreadCount() {
-    unreadCount = 0;
-    if (elements.notificationBadge) {
-        elements.notificationBadge.style.display = 'none';
-    }
+  unreadCount = 0;
+  if (elements.notificationBadge) {
+    elements.notificationBadge.style.display = 'none';
+  }
 }
+
 
 // Initialize App
 function init() {
