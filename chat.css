@@ -1,3 +1,4 @@
+chat.css
 :root {
     --primary-color: #128C7E;
     --primary-dark: #075E54;
@@ -13,7 +14,6 @@
     --messages-bg: rgba(229, 221, 213, 0.8);
     --error-color: #f44336;
     --success-color: #4CAF50;
-    --border-color: #E0E0E0; /* Added from second version */
 }
 
 .dark-mode {
@@ -31,7 +31,6 @@
     --messages-bg: #252525;
     --error-color: #ff6b6b;
     --success-color: #69f0ae;
-    --border-color: #444; /* Added from second version */
 }
 
 * {
@@ -47,10 +46,9 @@ body {
     transition: all 0.3s ease;
     height: 100vh;
     overflow: hidden;
-    line-height: 1.5; /* Added from second version */
 }
 
-/* Notification Badge - Preserved original but added display: none */
+/* Notification Badge */
 .notification-badge {
     position: fixed;
     top: 10px;
@@ -60,14 +58,14 @@ body {
     border-radius: 50%;
     width: 20px;
     height: 20px;
-    display: none; /* Changed from flex to none */
+    display: flex;
     align-items: center;
     justify-content: center;
     font-size: 12px;
     z-index: 1000;
 }
 
-/* Header - Preserved original structure */
+/* Header */
 .app-header {
     background-color: var(--primary-dark);
     color: white;
@@ -93,7 +91,7 @@ body {
     margin: 0 10px;
 }
 
-/* Chat Container - Preserved original */
+/* Chat Container */
 .chat-container {
     max-width: 800px;
     margin: 0 auto;
@@ -104,7 +102,7 @@ body {
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
-/* Messages Area - Preserved original but added background-blend-mode */
+/* Messages Area */
 .messages-container {
     flex: 1;
     overflow-y: auto;
@@ -113,14 +111,13 @@ body {
     background-image: url('https://web.whatsapp.com/img/bg-chat-tile-light_a4be512e7195b6b733d9110b408f075d.png');
     background-repeat: repeat;
     scroll-behavior: smooth;
-    background-blend-mode: overlay; /* Added from second version */
 }
 
 .dark-mode .messages-container {
     background-image: url('https://web.whatsapp.com/img/bg-chat-tile-dark_04fcacde539219fbb9ab8b20f4a22117.png');
 }
 
-/* Message Styles - Preserved original structure */
+/* Message Styles */
 .message {
     max-width: 75%;
     margin-bottom: 8px;
@@ -131,7 +128,6 @@ body {
     box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.1);
     animation: messageIn 0.3s ease forwards;
     clear: both;
-    line-height: 1.4; /* Added from second version */
 }
 
 /* Sent messages (right side) */
@@ -140,7 +136,6 @@ body {
     background-color: var(--message-sent);
     border-bottom-right-radius: 0;
     margin-right: 5px;
-    border: 1px solid rgba(0,0,0,0.03); /* Added from second version */
 }
 
 /* Received messages (left side) */
@@ -149,8 +144,6 @@ body {
     background-color: var(--message-received);
     border-bottom-left-radius: 0;
     margin-left: 5px;
-    border: 1px solid rgba(0,0,0,0.05); /* Added from second version */
-    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.03); /* Added from second version */
 }
 
 /* System messages */
@@ -161,7 +154,6 @@ body {
     text-align: center;
     clear: both;
     background-color: var(--system-message);
-    border: 1px solid rgba(0,0,0,0.05); /* Added from second version */
 }
 
 /* Clear floats */
@@ -171,7 +163,7 @@ body {
     clear: both;
 }
 
-/* Message Content - Preserved original */
+/* Message Content */
 .message-header {
     display: flex;
     align-items: baseline;
@@ -191,7 +183,7 @@ body {
     margin-bottom: 2px;
 }
 
-/* Timestamps - Preserved original */
+/* Timestamps */
 .timestamp {
     font-size: 11px;
     color: var(--timestamp-color);
@@ -207,7 +199,7 @@ body {
     text-align: left;
 }
 
-/* Message Status - Preserved original */
+/* Message Status */
 .message-status {
     float: right;
     margin-left: 5px;
@@ -222,7 +214,7 @@ body {
     color: var(--primary-color);
 }
 
-/* Message Actions - Preserved original */
+/* Message Actions */
 .message-actions {
     position: absolute;
     top: 5px;
@@ -266,14 +258,77 @@ body {
     transform: scale(1.1);
 }
 
-/* Input Area - Preserved original but added box-shadow */
+/* Reply Preview */
+.reply-preview {
+    background-color: var(--input-bg);
+    padding: 8px 12px;
+    border-left: 3px solid var(--primary-color);
+    margin-bottom: 5px;
+    display: none;
+}
+
+.reply-preview-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.reply-preview-text {
+    font-size: 0.85em;
+    color: var(--text-color);
+    opacity: 0.8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+}
+
+.reply-preview-text strong {
+    color: var(--primary-color);
+    font-weight: 500;
+}
+
+.cancel-reply-btn {
+    background: none;
+    border: none;
+    color: var(--timestamp-color);
+    cursor: pointer;
+    margin-left: 10px;
+    font-size: 1em;
+}
+
+.cancel-reply-btn:hover {
+    color: var(--error-color);
+}
+
+/* Message reply indicator */
+.message-reply {
+    font-size: 0.8em;
+    color: var(--timestamp-color);
+    border-left: 2px solid var(--primary-color);
+    padding-left: 8px;
+    margin-bottom: 5px;
+}
+
+.reply-sender {
+    color: var(--primary-color);
+    font-weight: 500;
+}
+
+/* Highlight replied-to message */
+.replying-to {
+    box-shadow: 0 0 0 2px var(--primary-light);
+    transition: box-shadow 0.3s ease;
+}
+
+/* Input Area */
 .input-container {
     display: flex;
     padding: 10px;
     background-color: var(--input-bg);
     align-items: center;
     gap: 8px;
-    border-top: 1px solid var(--border-color); /* Changed from rgba */
+    border-top: 1px solid rgba(0,0,0,0.1);
 }
 
 #messageInput {
@@ -285,14 +340,13 @@ body {
     font-size: 14px;
     background-color: var(--message-received);
     color: var(--text-color);
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05); /* Added from second version */
 }
 
 #messageInput:focus {
     box-shadow: 0 0 0 2px var(--primary-light);
 }
 
-/* Buttons - Preserved original but enhanced transitions */
+/* Buttons */
 .icon-button {
     background-color: var(--primary-color);
     color: white;
@@ -305,7 +359,6 @@ body {
     align-items: center;
     justify-content: center;
     transition: all 0.3s ease;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1); /* Added from second version */
 }
 
 .icon-button:hover {
@@ -319,9 +372,309 @@ body {
     transform: none;
 }
 
-/* Rest of the original CSS remains unchanged... */
+.primary-btn {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 10px 15px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s;
+    width: 100%;
+    margin-top: 10px;
+}
 
-/* Animations - Preserved original */
+.primary-btn:hover {
+    background-color: var(--primary-dark);
+}
+
+.reset-password {
+    color: var(--primary-color);
+    font-size: 0.8em;
+    text-align: center;
+    margin-top: 10px;
+    display: block;
+    cursor: pointer;
+}
+
+.reset-password:hover {
+    text-decoration: underline;
+}
+
+/* Online Users Panel */
+.online-users-panel {
+    position: absolute;
+    left: 10px;
+    top: 60px;
+    background-color: var(--container-bg);
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    padding: 15px;
+    width: 200px;
+    z-index: 100;
+    display: none;
+    min-height: 100px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.online-users-panel.show {
+    display: block;
+}
+
+.online-users-panel h3 {
+    margin-bottom: 10px;
+    font-size: 16px;
+}
+
+.online-user {
+    display: flex;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+}
+
+.no-users {
+    color: var(--timestamp-color);
+    font-size: 0.9em;
+    text-align: center;
+    padding: 10px;
+}
+
+.status-indicator {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: var(--primary-light);
+    margin-right: 8px;
+}
+
+.typing-badge {
+    font-size: 0.8em;
+    color: var(--primary-color);
+    margin-left: 5px;
+}
+
+.user-name {
+    font-size: 14px;
+}
+
+/* Typing Indicator */
+.typing-indicator {
+    background-color: var(--input-bg);
+    padding: 8px 15px;
+    border-radius: 15px;
+    font-size: 12px;
+    color: var(--timestamp-color);
+    margin: 5px 0;
+    display: none;
+    clear: both;
+}
+
+.typing-user {
+    display: inline-block;
+    margin-right: 5px;
+}
+
+/* Recording Status */
+#recordingStatus {
+    position: absolute;
+    bottom: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--error-color);
+    color: white;
+    padding: 8px 15px;
+    border-radius: 15px;
+    font-size: 14px;
+    display: none;
+}
+
+.pulsing-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: white;
+    animation: pulse 1.5s infinite;
+    margin-right: 8px;
+}
+
+/* Media Messages */
+.message-image {
+    max-width: 100%;
+    border-radius: 12px;
+    margin-top: 5px;
+    display: block;
+}
+
+.voice-message {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 5px;
+}
+
+audio {
+    flex: 1;
+    min-width: 200px;
+    max-width: 100%;
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.1));
+}
+
+/* Emoji Picker */
+emoji-picker {
+    --background: var(--input-bg);
+    --border-color: var(--timestamp-color);
+    --num-columns: 8;
+    --emoji-size: 1.5rem;
+    position: absolute;
+    bottom: 70px;
+    right: 10px;
+    z-index: 1000;
+    display: none;
+}
+
+emoji-picker.active {
+    display: block;
+}
+
+/* Modals */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.modal.show {
+    display: flex;
+    opacity: 1;
+}
+
+.modal-content {
+    background-color: var(--container-bg);
+    padding: 25px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    transform: translateY(20px);
+    transition: transform 0.3s ease;
+}
+
+.modal.show .modal-content {
+    transform: translateY(0);
+}
+
+.auth-tab {
+    background: none;
+    border: none;
+    padding: 10px 15px;
+    cursor: pointer;
+    font-size: 16px;
+    color: var(--text-color);
+    border-bottom: 2px solid transparent;
+}
+
+.auth-tab.active {
+    border-bottom: 2px solid var(--primary-color);
+    font-weight: 500;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.auth-form input {
+    padding: 12px 15px;
+    border: 1px solid var(--timestamp-color);
+    border-radius: 4px;
+    font-size: 14px;
+    background-color: var(--message-received);
+    color: var(--text-color);
+}
+
+/* Username Availability */
+.username-available {
+    color: var(--success-color);
+    font-size: 0.8em;
+    margin-top: 5px;
+    display: block;
+}
+
+.username-taken {
+    color: var(--error-color);
+    font-size: 0.8em;
+    margin-top: 5px;
+    display: block;
+}
+
+/* Mobile Keyboard Helper */
+.mobile-keyboard-helper {
+    height: 0;
+    transition: height 0.3s ease;
+}
+
+/* Undo Toast */
+.undo-toast {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--primary-dark);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 25px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.undo-btn {
+    background: none;
+    border: 1px solid white;
+    color: white;
+    padding: 3px 10px;
+    border-radius: 15px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.undo-btn:hover {
+    background: white;
+    color: var(--primary-dark);
+}
+
+/* Deletion States */
+.message.deleting {
+    opacity: 0.5;
+    transition: opacity 0.3s ease;
+}
+
+.message.error {
+    animation: shake 0.5s ease;
+    border-left: 3px solid var(--error-color);
+}
+
+/* Animations */
 @keyframes messageIn {
     from {
         opacity: 0;
@@ -345,7 +698,21 @@ body {
     40%, 80% { transform: translateX(3px); }
 }
 
-/* Responsive Adjustments - Preserved original */
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: var(--primary-color);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in srgb, var(--primary-color) 70%, transparent);
+}
+
+/* Responsive Adjustments */
 @media (max-width: 768px) {
     .chat-container {
         height: 100vh;
@@ -384,7 +751,7 @@ body {
     }
 }
 
-/* iOS Specific - Preserved original */
+/* iOS Specific */
 .ios #messageInput {
     font-size: 16px;
 }
