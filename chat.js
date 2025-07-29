@@ -176,7 +176,10 @@ function sendMessage() {
 
 function displayMessage(message, isCurrentUser = false) {
   const messageElement = document.createElement('div');
-  messageElement.className = `message ${isCurrentUser ? 'sent' : 'received'}`;
+  
+  // Determine message alignment based on sender
+  const messageClass = isCurrentUser ? 'message sent' : 'message received';
+  messageElement.className = messageClass;
   messageElement.dataset.messageId = message.id;
 
   const timeString = new Date(message.timestamp).toLocaleTimeString([], 
@@ -190,7 +193,7 @@ function displayMessage(message, isCurrentUser = false) {
     <span class="timestamp">${timeString}</span>
   `;
 
-  // Add status ticks for sent messages
+  // Add status ticks only for sent messages
   if (isCurrentUser) {
     messageContent += `
       <span class="message-status ${message.status}">
