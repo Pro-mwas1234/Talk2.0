@@ -1297,6 +1297,20 @@ function setupEventListeners() {
         elements.undoDelete.addEventListener('click', undoDelete);
     }
     
+    // Direct messaging event listeners
+    if (elements.chatSwitcher) {
+        elements.chatSwitcher.addEventListener('click', handleChatSwitch);
+    }
+    if (elements.backToDmList) {
+        elements.backToDmList.addEventListener('click', () => switchToDmList());
+    }
+    if (elements.onlineUsersList) {
+        elements.onlineUsersList.addEventListener('click', handleUserClick);
+    }
+    if (elements.recentChatsList) {
+        elements.recentChatsList.addEventListener('click', handleRecentChatClick);
+    }
+    
     if (elements.messagesContainer) {
         elements.messagesContainer.addEventListener('click', (e) => {
             const messageElement = e.target.closest('.message');
@@ -1341,6 +1355,270 @@ function setupEventListeners() {
     });
 }
 
+// Direct Messaging Functions
+function setupDirectMessaging() {
+    loadRecentChats();
+}
+
+function handleChatSwitch(e) {
+    const tab = e.target.closest('.chat-tab');
+    if (!tab) return;
+    
+    const chatType = tab.dataset.chat;
+    
+    // Update active tab
+    elements.chatSwitcher.querySelectorAll('.chat-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    
+    if (chatType === 'main') {
+        switchToMainChat();
+    } else if (chatType === 'dm') {
+        switchToDmList();
+    }
+}
+
+function switchToMainChat() {
+    currentChatMode = 'main';
+    elements.messagesContainer.style.display = 'flex';
+    elements.recentChats.classList.remove('show');
+    elements.dmConversation.classList.remove('active');
+    elements.dmHeader.classList.remove('show');
+    elements.chatTitle.textContent = '☘️Jaba Baze🍁';
+    
+    // Reset unread count for main chat
+    if (elements.mainChatUnread) {
+        elements.mainChatUnread.classList.remove('show');
+    }
+}
+
+function switchToDmList() {
+    currentChatMode = 'dm-list';
+    currentDmUser = null;
+    elements.messagesContainer.style.display = 'none';
+    elements.recentChats.classList.add('show');
+    elements.dmConversation.classList.remove('active');
+    elements.dmHeader.classList.remove('show');
+    elements.chatTitle.textContent = 'Direct Messages';
+    
+    loadRecentChats();
+}
+
+function switchToDmConversation(user) {
+    currentChatMode = 'dm-conversation';
+    currentDmUser = user;
+    elements.messagesContainer.style.display = 'none';
+    elements.recentChats.classList.remove('show');
+    elements.dmConversation.classList.add('active');
+    elements.dmHeader.classList.add('show');
+    
+    // Update DM header
+    if (elements.dmUserName) elements.dmUserName.textContent = user.username;
+    if (elements.dmUserStatus) {
+        elements.dmUserStatus.textContent = user.isOnline ? 'Online' : 'Offline';
+    }
+    elements.chatTitle.textContent = `Chat with ${user.username}`;
+    
+    // Load conversation
+    loadDirectMessages(user.id);
+    
+    // Clear unread count for this conversation
+    delete dmUnreadCounts[user.id];
+    updateDmUnreadIndicator();
+}
+
+function handleUserClick(e) {
+    const messageBtn = e.target.closest('.message-btn');
+    if (!messageBtn) return;
+    
+    e.stopPropagation();
+    const userElement = messageBtn.closest('.online-user');
+    const userId = userElement.dataset.userId;
+    const user = onlineUsers[userId];
+    
+    if (user) {
+        // Switch to DM tab first
+        elements.chatSwitcher.querySelector('[data-chat="dm"]').classList.add('active');
+        elements.chatSwitcher.querySelector('[data-chat="main"]').classList.remove('active');
+        
+        switchToDmConversation({
+            id: userId,
+            username: user.username || user.displayName,
+            isOnline: user.isOnline
+        });
+        
+        // Hide online users panel
+        elements.onlineUsersPanel.classList.remove('show');
+    }
+}
+
+function handleRecentChatClick(e) {
+    const chatItem = e.target.closest('.recent-chat-item');
+    if (!chatItem) return;
+    
+    const userId = chatItem.dataset.userId;
+    const username = chatItem.dataset.username;
+    const isOnline = onlineUsers[userId]?.isOnline || false;
+    
+    switchToDmConversation({
+        id: userId,
+        username: username,
+        isOnline: isOnline
+    });
+}
+
+function loadRecentChats() {
+    if (!currentUser.id) return;
+    
+    database.ref('conversationMetadata').orderByChild('lastMessageTime').once('value', (snapshot) => {
+        const conversations = [];
+        
+        snapshot.forEach((childSnapshot) => {
+            const conversation = childSnapshot.val();
+            const conversationId = childSnapshot.key;
+            
+            // Check if current user is a participant
+            if (conversation.participants && conversation.participants[currentUser.id]) {
+                const otherUserId = Object.keys(conversation.participants).find(id => id !== currentUser.id);
+                if (otherUserId) {
+                    conversations.push({
+                        id: conversationId,
+                        otherUserId: otherUserId,
+                        otherUsername: conversation.participants[otherUserId],
+                        lastMessage: conversation.lastMessage,
+                        lastMessageTime: conversation.lastMessageTime,
+                        unreadCount: dmUnreadCounts[otherUserId] || 0
+                    });
+                }
+            }
+        });
+        
+        // Sort by last message time (newest first)
+        conversations.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
+        
+        displayRecentChats(conversations);
+    });
+}
+
+function displayRecentChats(conversations) {
+    if (!elements.recentChatsList) return;
+    
+    if (conversations.length === 0) {
+        elements.recentChatsList.innerHTML = '<div class="no-users">No conversations yet</div>';
+        return;
+    }
+    
+    elements.recentChatsList.innerHTML = '';
+    
+    conversations.forEach(conversation => {
+        const chatItem = document.createElement('div');
+        chatItem.className = 'recent-chat-item';
+        chatItem.dataset.userId = conversation.otherUserId;
+        chatItem.dataset.username = conversation.otherUsername;
+        
+        const timeString = new Date(conversation.lastMessageTime).toLocaleTimeString([], 
+            { hour: '2-digit', minute: '2-digit' });
+        
+        chatItem.innerHTML = `
+            <div class="recent-chat-avatar">
+                ${conversation.otherUsername.charAt(0).toUpperCase()}
+            </div>
+            <div class="recent-chat-info">
+                <div class="recent-chat-name">${conversation.otherUsername}</div>
+                <div class="recent-chat-preview">${conversation.lastMessage}</div>
+            </div>
+            <div class="recent-chat-time">${timeString}</div>
+            ${conversation.unreadCount > 0 ? `<div class="recent-chat-unread">${conversation.unreadCount}</div>` : ''}
+        `;
+        
+        elements.recentChatsList.appendChild(chatItem);
+    });
+}
+
+function loadDirectMessages(otherUserId) {
+    if (!elements.dmMessages) return;
+    
+    elements.dmMessages.innerHTML = '';
+    const conversationId = getConversationId(currentUser.id, otherUserId);
+    
+    // Load messages
+    directMessagesRef.child(conversationId).orderByChild('timestamp').on('child_added', (snapshot) => {
+        const message = snapshot.val();
+        if (message && !message.deleted) {
+            displayDirectMessage({
+                ...message,
+                id: snapshot.key
+            });
+            scrollDmToBottom();
+        }
+    });
+    
+    // Setup typing indicator for this conversation
+    dmTypingRef.child(conversationId).on('value', (snapshot) => {
+        const typingData = snapshot.val() || {};
+        updateDmTypingIndicator(typingData);
+    });
+}
+
+function displayDirectMessage(message) {
+    if (!elements.dmMessages || message.deleted) return;
+    
+    const messageElement = document.createElement('div');
+    messageElement.className = `message ${message.senderId === currentUser.id ? 'sent' : 'received'}`;
+    messageElement.dataset.messageId = message.id;
+    
+    const timeString = new Date(message.timestamp).toLocaleTimeString([], 
+        { hour: '2-digit', minute: '2-digit' });
+    
+    let messageContent = `
+        <div class="message-header">
+            <span class="message-username">${message.senderName}</span>
+        </div>
+        <div class="message-text">${escapeHtml(message.text)}</div>
+        <span class="timestamp">${timeString}</span>
+    `;
+    
+    if (message.senderId === currentUser.id && message.status) {
+        messageContent += `
+            <span class="message-status ${message.status}">
+                <i class="fas fa-check${message.status === 'read' ? '-double' : ''}"></i>
+            </span>
+        `;
+    }
+    
+    messageElement.innerHTML = messageContent;
+    elements.dmMessages.appendChild(messageElement);
+    
+    // Update unread count if message is from other user
+    if (message.senderId !== currentUser.id && currentChatMode !== 'dm-conversation') {
+        dmUnreadCounts[message.senderId] = (dmUnreadCounts[message.senderId] || 0) + 1;
+        updateDmUnreadIndicator();
+    }
+}
+
+function updateDmTypingIndicator(typingData) {
+    // Implementation for DM typing indicator
+    // Similar to main chat but for the specific conversation
+}
+
+function scrollDmToBottom() {
+    if (!elements.dmMessages) return;
+    setTimeout(() => {
+        elements.dmMessages.scrollTop = elements.dmMessages.scrollHeight;
+    }, 100);
+}
+
+function updateDmUnreadIndicator() {
+    const totalUnread = Object.values(dmUnreadCounts).reduce((sum, count) => sum + count, 0);
+    
+    if (elements.dmUnread) {
+        if (totalUnread > 0) {
+            elements.dmUnread.textContent = totalUnread;
+            elements.dmUnread.classList.add('show');
+        } else {
+            elements.dmUnread.classList.remove('show');
+        }
+    }
+}
 function toggleOnlineUsersPanel() {
     if (!elements.onlineUsersPanel) return;
     elements.onlineUsersPanel.classList.toggle('show');
