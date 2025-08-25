@@ -83,11 +83,20 @@ let undoTimeout = null;
 const UNDO_TIMEOUT = 5000;
 const notificationSound = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-alarm-digital-clock-beep-989.mp3');
 
+// Direct Message State
+let currentChatMode = 'main'; // 'main', 'dm-list', 'dm-conversation'
+let currentDmUser = null;
+let dmConversations = {};
+let recentChats = [];
+let dmUnreadCounts = {};
+
 // Firebase References
 const messagesRef = database.ref('messages');
 const typingRef = database.ref('typing');
 const usersRef = database.ref('users');
 const usernamesRef = database.ref('usernames');
+const directMessagesRef = database.ref('directMessages');
+const dmTypingRef = database.ref('dmTyping');
 
 // Message Status Constants
 const MESSAGE_STATUS = {
@@ -102,6 +111,7 @@ function init() {
   auth.onAuthStateChanged(handleAuthStateChange);
   setupAuth();
   setupUsernameSelection();
+  setupDirectMessaging();
   updateDarkMode();
   setupEventListeners();
   setupMobileFeatures();
@@ -124,8 +134,16 @@ function sendMessage() {
   const messageText = elements.messageInput.value.trim();
   if (!messageText || !currentUser.id) return;
 
+  if (currentChatMode === 'dm-conversation' && currentDmUser) {
+    sendDirectMessage(messageText);
+  } else {
+    sendMainChatMessage(messageText);
+  }
+}
+
+function sendMainChatMessage(messageText) {
   const messageData = {
-    text: messageText,
+    text: escapeHtml(messageText).substring(0, 1000),
     senderId: currentUser.id,
     senderName: currentUser.username,
     timestamp: Date.now(),
@@ -169,6 +187,65 @@ function sendMessage() {
     });
 }
 
+function sendDirectMessage(messageText) {
+  const conversationId = getConversationId(currentUser.id, currentDmUser.id);
+  const messageData = {
+    text: escapeHtml(messageText).substring(0, 1000),
+    senderId: currentUser.id,
+    senderName: currentUser.username,
+    timestamp: Date.now(),
+    status: MESSAGE_STATUS.SENT,
+    readBy: {}
+  };
+
+  if (replyingTo) {
+    messageData.replyTo = replyingTo;
+  }
+
+  const newMessageRef = directMessagesRef.child(conversationId).push();
+  const messageId = newMessageRef.key;
+
+  // Optimistically display message
+  displayDirectMessage({
+    ...messageData,
+    id: messageId
+  });
+
+  // Send to Firebase
+  newMessageRef.set(messageData)
+    .then(() => {
+      // Update conversation metadata
+      updateConversationMetadata(conversationId, messageData);
+      
+      if (elements.messageInput) elements.messageInput.value = '';
+      if (elements.sendButton) elements.sendButton.disabled = true;
+      updateDmTyping(false);
+      
+      if (replyingTo) {
+        cancelReply();
+      }
+    })
+    .catch(error => {
+      console.error("Error sending direct message:", error);
+    });
+}
+
+function getConversationId(userId1, userId2) {
+  return [userId1, userId2].sort().join('_');
+}
+
+function updateConversationMetadata(conversationId, messageData) {
+  const metadataRef = database.ref(`conversationMetadata/${conversationId}`);
+  metadataRef.update({
+    lastMessage: messageData.text,
+    lastMessageTime: messageData.timestamp,
+    lastSenderId: messageData.senderId,
+    participants: {
+      [currentUser.id]: currentUser.username,
+      [currentDmUser.id]: currentDmUser.username
+    }
+  });
+}
 function setupMessageStatusListener(messageId) {
   messagesRef.child(messageId).on('value', (snapshot) => {
     const message = snapshot.val();
@@ -593,10 +670,14 @@ function setupPresence() {
             if (childSnapshot.key !== currentUser.id && elements.onlineUsersList) {
                 const userElement = document.createElement('div');
                 userElement.className = 'online-user';
+                userElement.dataset.userId = childSnapshot.key;
                 userElement.innerHTML = `
                     <span class="status-indicator"></span>
                     <span class="user-name">${user.username || user.displayName || 'Anonymous'}</span>
                     ${user.isTyping ? '<span class="typing-badge">typing...</span>' : ''}
+                    <button class="message-btn" title="Send direct message">
+                        <i class="fas fa-comment"></i>
+                    </button>
                 `;
                 elements.onlineUsersList.appendChild(userElement);
             }

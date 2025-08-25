@@ -32,6 +32,44 @@
         
         <div class="messages-container" id="messagesContainer"></div>
         
+        <!-- Chat Switcher -->
+        <div class="chat-switcher" id="chatSwitcher">
+            <button class="chat-tab active" data-chat="main">
+                Main Chat
+                <span class="unread-indicator" id="mainChatUnread"></span>
+            </button>
+            <button class="chat-tab" data-chat="dm">
+                Direct Messages
+                <span class="unread-indicator" id="dmUnread"></span>
+            </button>
+        </div>
+        
+        <!-- Direct Message Header -->
+        <div class="dm-header" id="dmHeader">
+            <button class="back-btn" id="backToDmList">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <div class="dm-user-info">
+                <div class="dm-user-name" id="dmUserName"></div>
+                <div class="dm-user-status" id="dmUserStatus">Online</div>
+            </div>
+        </div>
+        
+        <!-- Recent Chats List -->
+        <div class="recent-chats" id="recentChats">
+            <div class="recent-chats-header">
+                <h3>Recent Conversations</h3>
+            </div>
+            <div class="recent-chats-list" id="recentChatsList">
+                <div class="no-users">No conversations yet</div>
+            </div>
+        </div>
+        
+        <!-- Direct Message Conversation -->
+        <div class="dm-conversation" id="dmConversation">
+            <div class="dm-messages" id="dmMessages"></div>
+        </div>
+        
         <div id="typingIndicator" class="typing-indicator">
             <div id="typingUsers"></div>
         </div>
